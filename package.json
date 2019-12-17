@@ -19,6 +19,13 @@
     "react-native",
     "bsdiff"
   ],
+  "dependencies": {
+    "minimist": "^1.2.0",
+    "fs-extra": "^8.1.0",
+    "gradle-to-js": "^2.0.0",
+    "yauzl": "^2.10.0",
+    "yazl": "^2.5.1"
+  },
   "author": "malacca",
   "license": "MIT"
 }

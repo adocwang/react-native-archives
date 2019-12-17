@@ -1,3 +1,8 @@
+const makeBundle = require('./src/bundle');
+const {diffPackage, diffPPK} = require('./src/diff');
 
-
-export default '';
+module.exports = {
+  makeBundle,
+  diffPackage,
+  diffPPK
+};
