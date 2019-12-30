@@ -1,7 +1,7 @@
 /**
  * Created by tdzl2003 on 2/28/16.
  */
-const native = require('./../build/Release/bsdiff');
+const native = require('./build/Release/bsdiff');
 exports.native = native;
 
 exports.bsdiff = function(oldBuf, newBuf) {

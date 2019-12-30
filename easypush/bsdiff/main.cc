@@ -44,7 +44,7 @@ namespace bsdiffNode
       Local<Object> returnObj = node::Buffer::Copy(opaque->isolate, (const char*)buffer, size).ToLocalChecked();
 
       Local<Value> argv[1] = { returnObj };
-      opaque->cb->Call(context, Null(opaque->isolate), 1, argv);
+      (void) opaque->cb->Call(context, Null(opaque->isolate), 1, argv);
 
       return 0;
     }
@@ -55,7 +55,8 @@ namespace bsdiffNode
 
         if (!node::Buffer::HasInstance(args[0]) || !node::Buffer::HasInstance(args[1]) || !args[2]->IsFunction()) {
           isolate->ThrowException(Exception::TypeError(
-                            String::NewFromUtf8(isolate, "Invalid arguments.")));
+            v8::String::NewFromUtf8(isolate, "Invalid arguments.", v8::NewStringType::kNormal).ToLocalChecked()
+          ));
         }
 
         char*         oldData   = node::Buffer::Data(args[0]);
@@ -78,7 +79,8 @@ namespace bsdiffNode
 
         if (bsdiff((const uint8_t*)oldData, oldLength, (const uint8_t*)newData, newLength, &stream)) {
             isolate->ThrowException(Exception::Error(
-                    String::NewFromUtf8(isolate, "Create bsdiff failed.")));
+                v8::String::NewFromUtf8(isolate, "Create bsdiff failed.", v8::NewStringType::kNormal).ToLocalChecked()
+            ));
         }
 
 //        args.GetReturnValue().Set(returnObj);
@@ -90,7 +92,9 @@ namespace bsdiffNode
         HandleScope scope(isolate);
 
         if (!node::Buffer::HasInstance(args[0])) {
-          isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Invalid arguments.")));
+          isolate->ThrowException(Exception::TypeError(
+            v8::String::NewFromUtf8(isolate, "Invalid arguments.", v8::NewStringType::kNormal).ToLocalChecked()
+          ));
         }
 
         char*         Data   = node::Buffer::Data(args[0]);
@@ -105,7 +109,9 @@ namespace bsdiffNode
 
         int ret = BZ2_bzCompressInit ( &stream, 9, 0, 0 );
         if (ret != BZ_OK) {
-            isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Compress error")));
+            isolate->ThrowException(Exception::Error(
+                v8::String::NewFromUtf8(isolate, "Compress error", v8::NewStringType::kNormal).ToLocalChecked()
+            ));
         }
 
 //        Local<Object> obj = node::Buffer::New(isolate, 4096).ToLocalChecked();
@@ -122,7 +128,7 @@ namespace bsdiffNode
         while (ret == BZ_FINISH_OK) {
             Local<Object> obj = node::Buffer::Copy(isolate, bufStart, stream.next_out - bufStart).ToLocalChecked();
             Local<Value> argv[1] = { obj };
-            cb->Call(context, Null(isolate), 1, argv);
+            (void) cb->Call(context, Null(isolate), 1, argv);
 
             stream.next_out = bufStart;
             stream.avail_out = 4096;
@@ -131,12 +137,14 @@ namespace bsdiffNode
 
         if (ret != BZ_STREAM_END) {
             free(bufStart);
-            isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Compress error")));
+            isolate->ThrowException(Exception::Error(
+                v8::String::NewFromUtf8(isolate, "Compress failed", v8::NewStringType::kNormal).ToLocalChecked()
+            ));
         }
 
         Local<Object> obj = node::Buffer::Copy(isolate, bufStart, stream.next_out - bufStart).ToLocalChecked();
         Local<Value> argv[1] = { obj };
-        cb->Call(context, Null(isolate), 1, argv);
+        (void) cb->Call(context, Null(isolate), 1, argv);
 
         BZ2_bzCompressEnd(&stream);
         free(bufStart);

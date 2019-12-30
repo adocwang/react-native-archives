@@ -50,9 +50,10 @@ async function enableHermes(cwd) {
 /**
   生成用于更新的全量 bundle
   cwd: 运行目录
-  options: 与 react-native bundle 命令相同 {platform:"android", output:"dirPath", ...}
+  options: 与 react-native bundle 命令参数相同, 如
+          {platform:"android", output:"dirPath", "entry-file":"index.js", ...}
           一般只需指定 platform/output,  output 可使用相对于 cwd 的目录 或 绝对路径
-          不能使用 bundle-output, assets-dest 参数, 改为 --output 统一指定目录
+          不能使用 bundle-output, assets-dest 参数了, 改为 --output 统一指定目录
           若需要指定最终输出的文件名, 可使用 save-name 指定
   stdout: 信息输出的 stream
   stderr: 异常输出的 stream
@@ -61,7 +62,7 @@ async function enableHermes(cwd) {
 async function makeBundle(cwd, options, stdout, stderr, autoCreate) {
   if (!options.platform) {
     stderr.write(CError + "platform unspecified\n");
-    return;
+    return false;
   }
   if (!options['output']) {
     options['output'] = 'build';
@@ -121,7 +122,7 @@ async function makeBundle(cwd, options, stdout, stderr, autoCreate) {
     }
   } catch (e) {
     stderr.write(CError + errMsg(e) + "\n");
-    return;
+    return false;
   }
 
   // make ppk
@@ -133,9 +134,10 @@ async function makeBundle(cwd, options, stdout, stderr, autoCreate) {
     await pack(options['assets-dest'], ppkFile)
   } catch (e) {
     stderr.write(CError + errMsg(e) + "\n");
-    return;
+    return false;
   }
   stdout.write(CInfo + `saved to: ${ppkFile}\n`);
+  return ppkFile;
 }
 
 module.exports = makeBundle;

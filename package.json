@@ -1,27 +1,21 @@
 {
-  "name": "rn-make",
+  "name": "react-native-archives",
   "version": "0.0.2",
   "description": "react native pack manager",
   "main": "./index.js",
-  "bin": {
-    "rn-make": "./cli.js"
-  },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "install": "node-gyp rebuild"
-  },
-  "gypfile": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/malacca/rn-make"
+    "url": "https://github.com/malacca/react-native-archives"
   },
   "keywords": [
     "react-native",
-    "bsdiff"
+    "archives"
   ],
   "dependencies": {
     "minimist": "^1.2.0",
     "fs-extra": "^8.1.0",
+    "request": "^2.87.0",
+    "tough-cookie-filestore": "^0.0.1",
     "gradle-to-js": "^2.0.0",
     "yauzl": "^2.10.0",
     "yazl": "^2.5.1"

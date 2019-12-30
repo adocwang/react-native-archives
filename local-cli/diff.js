@@ -2,8 +2,10 @@ const path = require('path');
 const fs = require('fs-extra');
 const {ZipFile} = require('yazl');
 const {open:openZipFile} = require('yauzl');
-const {bsdiff} = require('./bsdiff');
-const {CInfo, CError, CWarning, errMsg, runCommand, pack} = require('./utils');
+const {
+  fileExist, CInfo, CError, CWarning, getBSDiff, 
+  errMsg, runCommand, pack
+} = require('./utils');
 
 function enumZipEntries(zipFn, callback) {
   return new Promise((resolve, reject) => {
@@ -61,25 +63,6 @@ function saveZipFile(zipfile, output, autoCreate) {
   })
 }
 
-function resolveOption(cwd, options, ios) {
-  let {origin, next, output, cmd} = options;
-  if (!origin || !next) {
-    const err = cmd ? 'npx re-make ' + (
-      ios === null ? 'diff' : (
-        ios ? 'diffipa' : 'diffapk'
-      )
-    ) + ' <origin> <next> [--output savePath]' : 'Argumets error';
-    throw err;
-  }
-  origin = path.resolve(cwd, origin);
-  next = path.resolve(cwd, next);
-  if (!output) {
-    output = 'build/output/diff-'+Date.now()+'.'+(ios === null ? 'diff' : (ios ? 'ipa' : 'apk'))+'-patch';
-  }
-  output = path.resolve(cwd, output);
-  return {origin, next, output}
-}
-
 function basename(fn) {
   const m = /^(.+\/)[^\/]+\/?$/.exec(fn);
   return m && m[1];
@@ -90,7 +73,33 @@ function transformIosPath(v) {
   return m && m[1];
 }
 
+function resolveOption(cwd, options, ios) {
+  let {origin, next, output, cmd} = options;
+  if (!origin || !next) {
+    const err = cmd ? 'easypush ' + (
+      ios === null ? 'diff' : (
+        ios ? 'diffipa' : 'diffapk'
+      )
+    ) + ' <origin> <next> [--output savePath]' : 'Argumets error';
+    throw err;
+  }
+  origin = path.resolve(cwd, origin);
+  next = path.resolve(cwd, next);
+  if (!fileExist(origin)) {
+    throw 'origin file not exist';
+  }
+  if (!fileExist(next)) {
+    throw 'next file not exist';
+  }
+  if (!output) {
+    output = 'build/output/diff-'+Date.now()+'.'+(ios === null ? 'diff' : (ios ? 'ipa' : 'apk'))+'-patch';
+  }
+  output = path.resolve(cwd, output);
+  return {origin, next, output}
+}
+
 async function diffFromPackage(cwd, options, stdout, stderr, ios, autoCreate) {
+  const bsdiff = getBSDiff();
   let {origin, next, output} = resolveOption(cwd, options, ios);
   const originBundleName = ios ? 'main.jsbundle' : 'assets/index.android.bundle';
   
@@ -159,6 +168,7 @@ async function diffFromPackage(cwd, options, stdout, stderr, ios, autoCreate) {
   // save patch
   await saveZipFile(zipfile, output, autoCreate)
   stdout.write(CInfo + `saved to: ${output}\n`);
+  return output;
 }
 
 /**
@@ -172,13 +182,15 @@ async function diffFromPackage(cwd, options, stdout, stderr, ios, autoCreate) {
 */
 async function diffPackage(cwd, options, stdout, stderr, ios, autoCreate) {
   try {
-    await diffFromPackage(cwd, options, stdout, stderr, ios, autoCreate);
+    return await diffFromPackage(cwd, options, stdout, stderr, ios, autoCreate);
   } catch (e) {
     stderr.write(CError + errMsg(e) + "\n");
+    return false;
   }
 }
 
 async function diffFromPPK(cwd, options, stdout, stderr, autoCreate) {
+  const bsdiff = getBSDiff();
   let {origin, next, output} = resolveOption(cwd, options, null);
 
   // read origin source
@@ -277,6 +289,7 @@ async function diffFromPPK(cwd, options, stdout, stderr, autoCreate) {
   // save patch
   await saveZipFile(zipfile, output, autoCreate)
   stdout.write(CInfo + `saved to: ${output}\n`);
+  return output;
 }
 
 /**
@@ -289,9 +302,10 @@ async function diffFromPPK(cwd, options, stdout, stderr, autoCreate) {
 */
 async function diffPPK(cwd, options, stdout, stderr, autoCreate) {
   try {
-    await diffFromPPK(cwd, options, stdout, stderr, autoCreate);
+    return await diffFromPPK(cwd, options, stdout, stderr, autoCreate);
   } catch (e) {
     stderr.write(CError + errMsg(e) + "\n");
+    return false;
   }
 }
 
