@@ -18,7 +18,9 @@
     "tough-cookie-filestore": "^0.0.1",
     "gradle-to-js": "^2.0.0",
     "yauzl": "^2.10.0",
-    "yazl": "^2.5.1"
+    "yazl": "^2.5.1",
+    "ora": "^3.4.0",
+    "wcwidth": "^1.0.1"
   },
   "author": "malacca",
   "license": "MIT"
