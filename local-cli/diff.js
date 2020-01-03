@@ -7,6 +7,7 @@ const {
   errMsg, runCommand, pack
 } = require('./utils');
 
+// TODO: 更换该组件, 该组件的文件 hash 用的 crc32, 碰撞概率有点大
 function enumZipEntries(zipFn, callback) {
   return new Promise((resolve, reject) => {
     openZipFile(zipFn, { lazyEntries: true }, (err, zipfile) => {
@@ -73,14 +74,10 @@ function transformIosPath(v) {
   return m && m[1];
 }
 
-function resolveOption(cwd, options, ios) {
+function resolveOption(cwd, options, commond) {
   let {origin, next, output, cmd} = options;
   if (!origin || !next) {
-    const err = cmd ? 'easypush ' + (
-      ios === null ? 'diff' : (
-        ios ? 'diffipa' : 'diffapk'
-      )
-    ) + ' <origin> <next> [--output savePath]' : 'Argumets error';
+    const err = cmd ? 'easypush ' + commond + ' <origin> <next> [--output savePath]' : 'Argumets error';
     throw err;
   }
   origin = path.resolve(cwd, origin);
@@ -92,15 +89,68 @@ function resolveOption(cwd, options, ios) {
     throw 'next file not exist';
   }
   if (!output) {
-    output = 'build/output/diff-'+Date.now()+'.'+(ios === null ? 'diff' : (ios ? 'ipa' : 'apk'))+'-patch';
+    if (commond === 'bsdiff') {
+      output = 'build/bsdiff/diff-'+Date.now()+'.patch';
+    } else {
+      output = 'build/output/diff-'+Date.now()+'.'+(commond === 'diff' ? 'diff' : (commond == 'diffipa' ? 'ipa' : 'apk'))+'-patch';
+    }
   }
   output = path.resolve(cwd, output);
   return {origin, next, output}
 }
 
+
+/**
+  工具函数, 生成两个文件的 diff 补丁包
+  cwd: 运行目录
+  options: {origin:"旧 ppk 路径", next:"新 ppk 路径", output:"patch生成路径"}
+  stdout: 信息输出的 stream
+  stderr: 异常输出的 stream
+  autoCreate: 若输出目录不存在, 是否自动创建
+*/
+async function bsdiff(cwd, options, stdout, stderr, autoCreate) {
+  try {
+    return await diffFiles(cwd, options, stdout, stderr, autoCreate);
+  } catch (e) {
+    stderr.write(CError + errMsg(e) + "\n");
+    return false;
+  }
+}
+async function diffFiles(cwd, options, stdout, stderr, autoCreate) {
+  const nativeDiff = getBSDiff();
+  let {origin, next, output} = resolveOption(cwd, options, 'bsdiff');
+  const from = fs.readFileSync(origin);
+  const to = fs.readFileSync(next);
+  if (autoCreate) {
+    fs.ensureDirSync(path.dirname(output));
+  }
+  fs.writeFileSync(output, nativeDiff(from, to));
+  stdout.write(CInfo + `saved to: ${output}\n`);
+  return output;
+}
+
+
+/**
+  生成用于更新的 相对于 apk/ipa 的增量 bundle
+  cwd: 运行目录
+  options: {origin:"apk 路径", next:"新 bundle 路径", output:"patch生成路径"}
+  stdout: 信息输出的 stream
+  stderr: 异常输出的 stream
+  ios: 是否为 ios
+  autoCreate: 若输出目录不存在, 是否自动创建
+*/
+async function diffPackage(cwd, options, stdout, stderr, ios, autoCreate) {
+  try {
+    return await diffFromPackage(cwd, options, stdout, stderr, ios, autoCreate);
+  } catch (e) {
+    stderr.write(CError + errMsg(e) + "\n");
+    return false;
+  }
+}
+// 对于 android 注意设置 crunchPngs false
 async function diffFromPackage(cwd, options, stdout, stderr, ios, autoCreate) {
   const bsdiff = getBSDiff();
-  let {origin, next, output} = resolveOption(cwd, options, ios);
+  let {origin, next, output} = resolveOption(cwd, options, ios ? 'diffipa' : 'diffapk');
   const originBundleName = ios ? 'main.jsbundle' : 'assets/index.android.bundle';
   
   // read origin source
@@ -171,27 +221,26 @@ async function diffFromPackage(cwd, options, stdout, stderr, ios, autoCreate) {
   return output;
 }
 
+
 /**
-  生成用于更新的 相对于 apk/ipa 的增量 bundle
+  生成用于更新的 相对于上个版本 bundle 的增量 bundle
   cwd: 运行目录
-  options: {origin:"apk 路径", next:"新 bundle 路径", output:"patch生成路径"}
+  options: {origin:"旧 ppk 路径", next:"新 ppk 路径", output:"patch生成路径"}
   stdout: 信息输出的 stream
   stderr: 异常输出的 stream
-  ios: 是否为 ios
   autoCreate: 若输出目录不存在, 是否自动创建
 */
-async function diffPackage(cwd, options, stdout, stderr, ios, autoCreate) {
+async function diffPPK(cwd, options, stdout, stderr, autoCreate) {
   try {
-    return await diffFromPackage(cwd, options, stdout, stderr, ios, autoCreate);
+    return await diffFromPPK(cwd, options, stdout, stderr, autoCreate);
   } catch (e) {
     stderr.write(CError + errMsg(e) + "\n");
     return false;
   }
 }
-
 async function diffFromPPK(cwd, options, stdout, stderr, autoCreate) {
   const bsdiff = getBSDiff();
-  let {origin, next, output} = resolveOption(cwd, options, null);
+  let {origin, next, output} = resolveOption(cwd, options, 'diff');
 
   // read origin source
   let originSource;
@@ -292,24 +341,9 @@ async function diffFromPPK(cwd, options, stdout, stderr, autoCreate) {
   return output;
 }
 
-/**
-  生成用于更新的 相对于上个版本 bundle 的增量 bundle
-  cwd: 运行目录
-  options: {origin:"旧 ppk 路径", next:"新 ppk 路径", output:"patch生成路径"}
-  stdout: 信息输出的 stream
-  stderr: 异常输出的 stream
-  autoCreate: 若输出目录不存在, 是否自动创建
-*/
-async function diffPPK(cwd, options, stdout, stderr, autoCreate) {
-  try {
-    return await diffFromPPK(cwd, options, stdout, stderr, autoCreate);
-  } catch (e) {
-    stderr.write(CError + errMsg(e) + "\n");
-    return false;
-  }
-}
 
 module.exports = {
+  bsdiff,
   diffPackage,
-  diffPPK
+  diffPPK,
 };

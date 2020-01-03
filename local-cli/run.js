@@ -262,7 +262,7 @@ async function diffOptions(type) {
   const output = options.output;
   let [origin, next] = options._;
   origin = origin || await ask(`origin ${type} path:`, completerPath);
-  next = next || await ask('new bundle path:', completerPath);
+  next = next || await ask(type === 'file' ? 'new file path:' : 'new bundle path:', completerPath);
   return {origin, next, output, cmd:true};
 }
 
@@ -292,6 +292,11 @@ async function diff() {
 }
 diff.options = 'origin_bundle new_bundle [--output save_name]';
 
+// 生成两个文件的 diff patch
+async function bsdiff() {
+  require('./diff').bsdiff(cwd, await diffOptions('file'), process.stdout, process.stderr, true)
+}
+bsdiff.options = 'origin_file new_file [--output save_name]';
 
 // run ======================================================================
 
@@ -315,7 +320,8 @@ const support = {
   bundle,
   diffapk,
   diffipa,
-  diff
+  diff,
+  bsdiff
 };
 
 
