@@ -103,9 +103,7 @@ function wasm(file, opts) {
       file = 'file://' + file;
     }
   }
-  console.log(cached);
   if (cached[file]) {
-    console.log('from cache')
     return Promise.resolve(cached[file]);
   }
   let pros;
