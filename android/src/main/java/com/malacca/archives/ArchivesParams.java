@@ -1,19 +1,38 @@
 package com.malacca.archives;
 
 import java.io.File;
-import android.content.Context;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.WritableArray;
+import com.facebook.react.bridge.ReactApplicationContext;
 
 class ArchivesParams {
-    static final int TASK_BS_PATCH = 1;
-    static final int TASK_UNZIP_FILE = 2;
-    static final int TASK_UNZIP_PATCH = 3;
-    static final int TASK_UNZIP_DIFF = 4;
+    enum TASK {
+        GET_HASH,
+        IS_DIR,
+        READ_DIR,
+        RM_DIR,
+        READ_FILE,
+        SAVE_FILE,
+        COPY_FILE,
+        MOVE_FILE,
+        BS_PATCH,
+        UNZIP_FILE,
+        UNZIP_PATCH,
+        UNZIP_DIFF
+    }
 
-    int     type;
+    TASK task;
+    ReactApplicationContext context;
+
+    String filepath;
+    String encoding;
+    boolean append;
+    Double position;
+    Double length;
+
     String  md5;
-    Context context;
+    String  source;
     String  origin;
-    File    source;
     File    dest;
 
     void onDebug(String debug) {
@@ -21,5 +40,13 @@ class ArchivesParams {
     void onFailed(Throwable error){
     }
     void onSuccess(){
+    }
+    void onSuccess(Boolean result){
+    }
+    void onSuccess(String result){
+    }
+    void onSuccess(WritableMap result){
+    }
+    void onSuccess(WritableArray result){
     }
 }

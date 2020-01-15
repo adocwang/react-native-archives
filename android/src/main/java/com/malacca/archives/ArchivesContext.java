@@ -11,6 +11,9 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 
+/**
+ * 热更版本记录
+ */
 class ArchivesContext {
     private static File rootDir;
     private static SharedPreferences sp;
@@ -88,10 +91,11 @@ class ArchivesContext {
     }
 
     static String getRootDir() {
-        return rootDir.toString();
+        return rootDir.getAbsolutePath();
     }
 
-    static Map<String, Object> getConstants() {
+    static Map<String, Object> getConstants(Context context) {
+        init(context);
         String currentVersion = getCurrentVersion();
         boolean isFirstTime = sp.getBoolean("firstTime", false);
         boolean isRolledBack = sp.getBoolean("rolledBack", false);

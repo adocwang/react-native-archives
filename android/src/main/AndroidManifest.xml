@@ -1,4 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           package="com.malacca.archives">
 
+    <application>
+        <provider
+            android:name=".ArchivesProvider"
+            android:authorities="${applicationId}.archivesProvider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+
 </manifest>
