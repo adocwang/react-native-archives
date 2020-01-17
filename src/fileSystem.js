@@ -301,6 +301,10 @@ const fs = {
     })
   },
 
+  getShareUri(file){
+    return ArchivesModule.getShareUri(file)
+  },
+
   isDir(path){
     return getFilePath(path, true, 'dir path').then(([file, debug]) => {
       return debug ? false : ArchivesModule.isDir(file);
@@ -356,9 +360,9 @@ const fs = {
     })
   },
 
-  // 1. 不指定 flag, 覆盖写入
-  // 2. flag=true 追加
-  // 3. flag=Number 在指定的位置写入, 为负数则从文件尾部算起
+  // file: 一般为 file://path, 也可以是 content://provder 前提是有写入权限
+  // content: 可以是 Blob 对象, 也可以是 string, 若 content 为 base64, 设置为 [content]
+  // flag: 不指定(覆盖写入) / true(追加写入) / Number(在指定的位置写入, 为负数则从文件尾部算起)
   writeFile(file, content, flag){
     return getString([
       [file, 'file path']

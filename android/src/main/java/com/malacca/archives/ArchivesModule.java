@@ -193,6 +193,29 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         runManagerTask(params, ArchivesParams.TASK.GET_HASH);
     }
 
+    // 获取私有文件的 content:// uri
+    @ReactMethod
+    public void getShareUri(String path, final Promise promise) {
+        try {
+            Uri uri = getProviderUri(Uri.parse(path).getPath());
+            promise.resolve(uri.toString());
+        } catch (Throwable e) {
+            if (BuildConfig.DEBUG) {
+                e.printStackTrace();
+            }
+            promise.reject(e);
+        }
+    }
+
+    private Uri getProviderUri(String filepath) {
+        File file = new File(filepath);
+        return ArchivesProvider.getUriForFile(
+                rnContext,
+                rnContext.getPackageName() + ".archivesProvider",
+                file
+        );
+    }
+
     // 支持路径与 getHash 相同, 其中 file:// asset:// 支持文件夹判断
     // 返回: true(文件夹) false(文件) null(不存在)
     @ReactMethod
@@ -852,13 +875,8 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
             Uri uri = Uri.parse(path);
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            if(Build.VERSION.SDK_INT>= Build.VERSION_CODES.N) {
-                File file = new File(uri.getPath());
-                uri = ArchivesProvider.getUriForFile(
-                        rnContext,
-                        rnContext.getPackageName() + ".archivesProvider",
-                        file
-                );
+            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                uri = getProviderUri(uri.getPath());
                 intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             } else {
                 if (uri.getScheme() == null) {
@@ -878,4 +896,5 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
             promise.reject(e);
         }
     }
+
 }

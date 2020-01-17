@@ -5,6 +5,9 @@ export default function(Archives, file, content, flag) {
   if (Blob.prototype.isPrototypeOf(content)) {
     params.encoding = 'blob';
     params.content = content.data.blobId;
+  } else if (Array.isArray(content)) {
+    params.encoding = 'base64';
+    params.content = content.shift();
   } else {
     params.encoding = 'utf8';
     params.content = content;
@@ -17,5 +20,5 @@ export default function(Archives, file, content, flag) {
       params.position = position;
     }
   }
-  return Archives.writeFile(params);
+  return Archives.writeFile(params)
 }

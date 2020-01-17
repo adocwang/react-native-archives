@@ -430,13 +430,16 @@ class HttpRequest {
   onDownload(){
     return this._init('onDownload', arguments);
   }
-  saveTo(){
-    return this._init('saveTo', arguments);
-  }
   // 考虑到 Service 一般用于 api 查询, 
   // 为防止内存泄露, 不特别指定的话, 不支持 blob 返回值
   resBlob(){
     return this._init('resBlob', arguments);
+  }
+  saveTo(){
+    return this._init('saveTo', arguments);
+  }
+  keepBlob(){
+    return this._init('keepBlob', arguments);
   }
   // 安装信号
   // @see https://developers.google.com/web/updates/2017/09/abortable-fetch
