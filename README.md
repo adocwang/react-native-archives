@@ -340,4 +340,6 @@ class Page extends React.Component {
 
 命令行 `easypush` 查看可用命令，若未全局安装， `npx easypush` 替代即可
 
-可使用命令行完成 热更 全量包/补丁包 的生成，并上传到服务器，服务端需要实现的接口参见 [api.js](local-cli/api.js#L41)，自行实现即可（搜索 POST: 可查看所有需要实现的 api）
+可使用命令行完成 热更 全量包/补丁包 的生成，并上传到服务器，服务端需要实现的接口参见 [api.js](local-cli/api.js#L41)，自行实现即可
+
+（搜索 `POST:` 可查看所有需要实现的 api）
