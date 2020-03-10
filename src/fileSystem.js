@@ -42,6 +42,7 @@ function getDirPath(dir) {
   ]);
 }
 
+// file 可以是 require() | file://  | content://  | asset://
 function getFilePath(file, allowDebug, prefix) {
   return getString([
     [file, prefix||'file path']
@@ -519,6 +520,28 @@ const fs = {
     ]).then(() => {
       return ArchivesModule.addDownloadComplete(options)
     });
+  },
+  
+  // 加载字体
+  loadFont(fontName, file) {
+    return getFilePath(file, true, 'font path').then(([file, debug]) => {
+      if (!debug) {
+        return file;
+      }
+      let ext = file.split('?')[0];
+      ext = ext.substr(ext.lastIndexOf('.'));
+      const tempFile = ArchivesModule.dirs.Temporary + '/' + fontName + ext;
+      console.log(tempFile)
+      const options = {
+        url: file,
+        saveTo: tempFile,
+      };
+      return xmlFetch(options).then(() => {
+        return tempFile
+      })
+    }).then(file => {
+      return ArchivesModule.loadFont(fontName, file)
+    })
   }
 };
 

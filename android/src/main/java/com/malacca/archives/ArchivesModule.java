@@ -10,9 +10,10 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 import android.net.Uri;
-import android.text.TextUtils;
 import android.util.Log;
+import android.text.TextUtils;
 import android.database.Cursor;
+import android.graphics.Typeface;
 import android.app.Activity;
 import android.app.Application;
 import android.app.DownloadManager;
@@ -29,8 +30,8 @@ import android.content.BroadcastReceiver;
 import android.content.pm.PackageManager;
 import android.util.LongSparseArray;
 import android.webkit.MimeTypeMap;
-
 import androidx.annotation.NonNull;
+import androidx.core.content.res.ResourcesCompat;
 
 import com.facebook.react.ReactApplication;
 import com.facebook.react.ReactInstanceManager;
@@ -46,6 +47,7 @@ import com.facebook.react.bridge.JSBundleLoader;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReadableMapKeySetIterator;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
+import com.facebook.react.views.text.ReactFontManager;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 public class ArchivesModule extends ReactContextBaseJavaModule {
@@ -897,4 +899,27 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         }
     }
 
+    @ReactMethod
+    public void loadFont(final String fontFamilyName, final String fontPath, final Promise promise) {
+        try {
+            Typeface typeface;
+            if (fontPath.startsWith("raw://")) {
+                int identifier = rnContext.getResources().getIdentifier(
+                        fontPath.substring(6),
+                        "raw",
+                        rnContext.getPackageName()
+                );
+                typeface = ResourcesCompat.getFont(rnContext, identifier);
+            } else if (fontPath.startsWith("asset://")) {
+                typeface = Typeface.createFromAsset(rnContext.getAssets(), fontPath.substring(9));
+            } else {
+                Uri uri = Uri.parse(fontPath);
+                typeface = Typeface.createFromFile(new File(uri.getPath()));
+            }
+            ReactFontManager.getInstance().setTypeface(fontFamilyName, Typeface.NORMAL, typeface);
+            promise.resolve(null);
+        } catch (Exception e) {
+            promise.reject("E_UNEXPECTED", "loadFont unexpected exception: " + e.getMessage(), e);
+        }
+    }
 }

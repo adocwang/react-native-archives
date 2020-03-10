@@ -77,7 +77,7 @@ function xmlFetch(request) {
           if (!keepBlob) {
             body.close();
           }
-          resolve(new ResponsePlus(body, options));
+          resolve(new ResponsePlus(keepBlob ? body : null, options));
         }).catch(reject)
       } else {
         resolve(new ResponsePlus(body, options));

@@ -186,6 +186,9 @@ options: {
 */
 fs.addDownload(options).then(NULL)
 
+// 加载一个字体文件
+fs.loadFont(fontFamily, file).then(NULL)
+
 // 将 path 使用 bsdiff 算法 合并到 source, 保存为 dest
 fs.bsPatch(String:source, String:patch, String:dest).then(NULL)
 
@@ -222,6 +225,9 @@ fs.reload();
 fs.restart();
 
 ```
+
+
+
     
 ##  fetchPlus
 
