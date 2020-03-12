@@ -1,6 +1,6 @@
 {
   "name": "react-native-archives",
-  "version": "0.0.8",
+  "version": "0.1.0",
   "description": "react native pack manager",
   "main": "./index.js",
   "repository": {

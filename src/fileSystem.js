@@ -531,7 +531,6 @@ const fs = {
       let ext = file.split('?')[0];
       ext = ext.substr(ext.lastIndexOf('.'));
       const tempFile = ArchivesModule.dirs.Temporary + '/' + fontName + ext;
-      console.log(tempFile)
       const options = {
         url: file,
         saveTo: tempFile,
