@@ -14,9 +14,9 @@
 
 ```js
 import {
-    status, 
     dirs, 
     external, 
+    status, 
     utils, 
     fs, 
     fetchPlus, 
@@ -24,23 +24,10 @@ import {
 } from "react-native-archives"
 ```
 
-## status
-
-为热更提供的相关变量
-
-```js
-status: {
-    downloadRootDir: "",  //热更包保存路径
-    packageVersion: "",   //当前包主版本
-    currentVersion: "",   //当前热更版本
-    isFirstTime: "",      //是否为该热更版本首次运行(需手动标记为成功)
-    isRolledBack:"",      //是否为热更失败，回退到 currentVersion 版本, 仅提示一次
-}
-```
 
 ## dirs
 
-手机内部存储相关文件夹，专属于 app 的私有目录
+手机内部存储相关文件夹，专属于 app 的私有目录，无需权限
 
 ```js
 dirs:{
@@ -74,6 +61,20 @@ external:{
     Ringtones:"",   // 来电铃声
     Alarms:"",      // 闹钟
     Notifications:"",   // 通知铃声
+}
+```
+
+## status
+
+为热更提供的相关变量
+
+```js
+status: {
+    downloadRootDir: "",  //热更包保存路径
+    packageVersion: "",   //当前包主版本
+    currentVersion: "",   //当前热更版本
+    isFirstTime: "",      //是否为该热更版本首次运行(需手动标记为成功)
+    isRolledBack:"",      //是否为热更失败，回退到 currentVersion 版本, 仅提示一次
 }
 ```
 
@@ -189,22 +190,64 @@ fs.addDownload(options).then(NULL)
 // 加载一个字体文件
 fs.loadFont(fontFamily, file).then(NULL)
 
-// 将 path 使用 bsdiff 算法 合并到 source, 保存为 dest
-fs.bsPatch(String:source, String:patch, String:dest).then(NULL)
-
 // 解压 zip 文件, md5 可缺省, 若设置了, 会在解压前校验 zip 文件的 md5 hash
 // 校验失败会抛出异常
 fs.unzip(String:filePath, String:dir, String:md5).then(NULL)
 
-// 解压 热更全量包, md5 可选
+// 将 path 使用 bsdiff 算法 合并到 source, 保存为 dest
+fs.bsPatch(String:source, String:patch, String:dest).then(NULL)
+
+// 重载应用 (release 模式重载 js bundle / debug 模式会重启 app)
+fs.reload();
+
+// 重启 app
+fs.restart();
+```
+
+## fs
+
+以下为专门应对热更的接口
+
+```js
+
+/** 
+ * 解压 热更全量包
+ * filePath: 已下载好的全量包本地地址 
+ * md5: 可选, 全量包的 md5 值, 若提供则会在解压前进行验证
+ *      若不提供则自动获取
+ * 
+ * 成功后可
+ * switchVersion(md5 [, reload])
+ * 
+*/
 fs.unzipBundle(String:filePath, String:md5).then(NULL)
 
-// 解压相对于安装包的 增量 patch 包
-// 必须指定 md5Version, 可选: 验证 patch 包的 patchMd5
+
+/** 
+ * 解压相对于安装包的 增量 patch 包
+ * file: 已下载好的增量 patch 包本地地址
+ * md5Version: 必须提供, 该 md5 值为 patch 合并到安装包后的 md5 值
+ *             即本次的热更版本号
+ * patchMd5: 可选，patch 文件的 md5 值
+ * 
+ * 
+ * 成功后操作同上
+*/
 fs.unzipPatch(String:file, String:md5Version, String:patchMd5).then(NULL)
 
-// 解压相对于 originVersion 的 增量 patch 包
-// 必须指定 md5Version, originVersion, 可选: 验证 patch 包的 patchMd5
+
+/** 
+ * 解压相对于 originVersion 的 增量 patch 包
+ * file: 已下载好的增量 patch 包本地地址
+ * md5Version: 必须提供, 该 md5 值为 patch 合并到 originVersion 后的 md5 值
+ *             即本次的热更版本号
+ * originVersion: 必须提供, 原热更版本包的 md5 值
+ *                该值通常为 status.currentVersion
+ * patchMd5: 可选，patch 文件的 md5 值
+ * 
+ * 
+ * 成功后操作同上
+*/
 fs.unzipDiff(
     String:file, 
     String:md5Version, 
@@ -212,21 +255,22 @@ fs.unzipDiff(
     String:patchMd5
 ).then(NULL)
 
-// 切换到指定的热更版本, reload:是否立即重启(默认为false)
+/**
+ * 切换到指定的热更版本
+ * md5Version: 要切换到的热更版本
+ * reload: 是否立即重启(默认为false)
+*/
 fs.switchVersion(String:md5Version, Boolean:reload).then(NULL)
 
-// 热更版首次启动时, 通过该方法生效热更版本
+/**
+ * 通过 status.isFirstTime 判断是否为热更版本首次启动, 
+ * 通过该方法生效当前热更版本
+ * 1. 若在启动后不调用该方法, 下次启动会回退
+ * 2. 若启动后发生异常, 无法执行该方法, 下次启动回退
+*/
 fs.markSuccess();
 
-// 重载应用 (release 模式重载 js bundle / debug 模式会重启 app)
-fs.reload();
-
-// 重启 app
-fs.restart();
-
 ```
-
-
 
     
 ##  fetchPlus
@@ -237,8 +281,19 @@ fs.restart();
 fetchPlus(options)
 fetchPlus(Request|url, options)
 
-// options 支持 fetch 原有参数, 新增
+// options 支持 fetch 原有参数, 
+options:{
+  url,
+  method,
+  credentials,
+  headers,
+  mode,
+  body,
+  signal
+}
 
+
+// 新增以下参数
 options:{
     timeout:int,      // 超时时间 (毫秒)
     resText:Boolean,  // 默认与原 fetch 保持一致, 为 false
