@@ -30,6 +30,21 @@ function parseHeaders(rawHeaders) {
   return headers
 }
 
+// from github fetch polyfill 
+// RN 全局没有导入该类
+try {
+  new DOMException()
+} catch (err) {
+  DOMException = function(message, name) {
+    this.message = message
+    this.name = name
+    var error = Error(message)
+    this.stack = error.stack
+  }
+  DOMException.prototype = Object.create(Error.prototype)
+  DOMException.prototype.constructor = DOMException
+}
+
 // xmlFetch: 这里的代码部分来自于 github fetch polyfill, 新增 fetchListener/fetchExtend 支持
 function xmlFetch(request) {
   return new Promise(function(resolve, reject) {

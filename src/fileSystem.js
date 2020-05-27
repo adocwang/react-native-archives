@@ -205,9 +205,9 @@ function listenDownloadEvent(e) {
   }
   if (event === 'complete') {
     let autoOpen = obj.autoOpen;
-    const {file, mime, size} = props;
-    if (!file || !size) {
-      obj.complete && obj.complete(props);
+    const {error, file, mime, size} = props;
+    if (error) {
+      obj.error && obj.error(error);
     } else {
       if (obj.progress && obj.percent < 100) {
         obj.progress({
@@ -216,7 +216,7 @@ function listenDownloadEvent(e) {
           total: size,
         });
       }
-      obj.complete && obj.complete(props);
+      obj.download && obj.download(props);
       if (autoOpen && file) {
         autoOpen = null;
         fs.openFile(file, mime||"").then(() => {
@@ -234,25 +234,29 @@ function listenDownloadEvent(e) {
 }
 function startDownload(options){
   invariant(IsAndroid, 'download method only support android');
-  const {url, onProgress, onComplete, onAutoOpen} = options||{};
+  const {url, onProgress, onError, onDownload, onAutoOpen, ...rest} = options||{};
   return getString([
     [url, 'url path']
   ]).then(() => {
     const obj = {};
+    rest.url = url;
     if (onProgress) {
       obj.progress = onProgress;
-      options.onProgress = true;
+      rest.onProgress = true;
     }
-    if (onComplete) {
-      obj.complete = onComplete;
-      options.onComplete = true;
+    if (onError) {
+      obj.error = onError;
+      rest.onComplete = true;
+    }
+    if (onDownload) {
+      obj.download = onDownload;
+      rest.onComplete = true;
     }
     if (onAutoOpen) {
       obj.autoOpen = onAutoOpen;
-      delete options.onAutoOpen;
-      options.onComplete = true;
+      rest.onComplete = true;
     }
-    return ArchivesModule.addDownloadService(options).then(taskId => {
+    return ArchivesModule.addDownloadService(rest).then(taskId => {
       return new Promise((resolve, reject) => {
         obj.resolve = resolve;
         obj.reject = reject;

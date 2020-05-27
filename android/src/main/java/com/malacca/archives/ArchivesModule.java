@@ -874,6 +874,10 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void openFile(String path, String mime, final Promise promise) {
         try {
+            Activity activity = getCurrentActivity();
+            if (activity == null) {
+                throw new RuntimeException("get current activity failed");
+            }
             Uri uri = Uri.parse(path);
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -889,7 +893,7 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
                 mime = getMimeTypeFromStr(new String[]{path}, true)[0];
             }
             intent.setDataAndType(uri, mime);
-            rnContext.startActivity(intent);
+            activity.startActivity(intent);
             promise.resolve(null);
         } catch (Throwable e) {
             if (BuildConfig.DEBUG) {

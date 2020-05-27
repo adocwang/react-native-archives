@@ -47,7 +47,9 @@ Android 上的，外部存储目录，有可能在 SD 卡中，若手机没有 S
 
 ```js
 external:{
-    AppCaches: "",   // app 缓存文件夹，在外部存储上，但会随着 app 的卸载而删除
+    // app 缓存、文件目录，在外部存储上，但会随着 app 的卸载而删除
+    AppCaches: "",   
+    AppDocument:"",
 
     // 以下是公用目录，存储的文件不会随着 app 卸载而删除, 需要额外申请权限
 
@@ -104,7 +106,7 @@ fs.getHash(String:filePath, String:algorithm).then((String:hash) => {})
 // 可以让其他程序读取该文件
 fs.getShareUri(String:filePath).then((String:uri) => {})
 
-// 路径是否为文件夹
+// 路径是否为文件夹 (true: 是, false:是文件夹, null:不存在)
 fs.isDir(String:filePath).then((Boolean:yes) => {})
 
 // 创建文件夹, 创建失败会抛出异常
@@ -168,7 +170,8 @@ options: {
     network:int,  MOBILE:1, WIFI:2, ALL:3
     headers:{}  自定义 header 头
     onProgress: Function({total, loaded, percent}), 监听下载进度
-    onComplete: Function({file, url, mime, size, mtime}),  下载完成的回调
+    onError: Function(error),  下载失败回调
+    onDownload: Function({file, url, mime, size, mtime}),  下载完成的回调
     onAutoOpen: Function(null|error), 尝试自动打开文件,并监听打开是否成功
 }
 */
