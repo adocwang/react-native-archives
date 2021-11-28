@@ -1,17 +1,17 @@
 /*
 rn 当前默认不支持 WebAssembly, 若支持了, 便可使用该组件
 
-import wasm from 'react-native-archives/src/wasm';
-wasm(file, importObject).then(r => {
-  consol.log(r);
-})
+  import wasm from 'react-native-archives/src/wasm';
+  wasm(file, importObject).then(r => {
+    consol.log(r);
+  })
 
 其中 file 支持
-1. res://
-2. asset://
-3. file://
-4. require('localFile')
-5. http(s)://
+  1. require('localFile')
+  2. res://
+  3. asset://
+  4. file://
+  5. http(s)://
 
 关于 require() 形式, rn 使用 metro 判断引入文件
 

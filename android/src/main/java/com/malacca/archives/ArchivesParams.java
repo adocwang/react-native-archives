@@ -15,7 +15,7 @@ class ArchivesParams {
         SAVE_FILE,
         COPY_FILE,
         MOVE_FILE,
-        BS_PATCH,
+        MERGE_PATCH,
         UNZIP_FILE,
         UNZIP_PATCH,
         UNZIP_DIFF

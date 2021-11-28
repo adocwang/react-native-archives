@@ -5,6 +5,7 @@ import java.io.IOException;
 
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Objects;
 
 import android.util.Log;
 import android.content.Context;
@@ -12,7 +13,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 
 /**
- * 热更版本记录
+ * 读写热更信息
  */
 class ArchivesContext {
     private static File rootDir;
@@ -175,11 +176,12 @@ class ArchivesContext {
     private static void doClearUp() throws IOException {
         String currentVersion = getCurrentVersion();
         String lastVersion = sp.getString("lastVersion", null);
-        for (File sub : rootDir.listFiles()) {
+        for (File sub : Objects.requireNonNull(rootDir.listFiles())) {
             if (sub.getName().charAt(0) == '.') {
                 continue;
             }
             if (sub.isFile()) {
+                //noinspection ResultOfMethodCallIgnored
                 sub.delete();
                 continue;
             }

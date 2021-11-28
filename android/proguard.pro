@@ -1,2 +1,1 @@
--keepnames class cn.reactnative.modules.update.DownloadTask { *; }
--keepnames class com.facebook.react.ReactInstanceManager { *; }
+-keepnames class com.malacca.archives.ArchivesPatch { *; }

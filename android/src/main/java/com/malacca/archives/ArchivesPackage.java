@@ -11,14 +11,14 @@ import com.facebook.react.bridge.ReactApplicationContext;
 
 public class ArchivesPackage implements ReactPackage {
 
-    @Override
     @NonNull
+    @Override
     public List<NativeModule> createNativeModules(@NonNull ReactApplicationContext reactContext) {
-        return Collections.<NativeModule>singletonList(new ArchivesModule(reactContext));
+        return Collections.singletonList(new ArchivesModule(reactContext));
     }
 
-    @Override
     @NonNull
+    @Override
     public List<ViewManager> createViewManagers(@NonNull ReactApplicationContext reactContext) {
         return Collections.emptyList();
     }

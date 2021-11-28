@@ -1,21 +1,20 @@
+
 import {NativeModules} from 'react-native';
-const {ArchivesModule} = NativeModules;
-const {status, dirs, external} = ArchivesModule;
+import utils from './src/utils';
+import fs from './src/fileSystem';
+import HttpService from './src/HttpService';
+import {BlobPlus, RequestPlus, ResponsePlus, fetchPlus} from './src/fetchPlus';
+const {status, dirs, external} = NativeModules.ArchivesModule;
 
 module.exports = {
-  status, 
-  dirs, 
+  dirs,
+  status,
   external,
-  get utils() {
-    return require('./src/utils').default;
-  },
-  get fs() {
-    return require('./src/fileSystem');
-  },
-  get fetchPlus() {
-    return require('./src/fetchPlus').fetchPlus;
-  },
-  get HttpService() {
-    return require('./src/HttpService');
-  },
+  fs,
+  utils,
+  BlobPlus,
+  fetchPlus,
+  RequestPlus,
+  ResponsePlus,
+  HttpService,
 };

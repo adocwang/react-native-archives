@@ -1,10 +1,11 @@
 // 这里只是为了不让  FileSystem 和 FetchPlush 互相引用 导致 黄色警告
-import utils from './utils';
-export default function(Archives, file, content, flag) {
+import {getNumber} from './utils';
+module.exports = function(Archives, file, content, flag) {
   const params = {file};
   if (Blob.prototype.isPrototypeOf(content)) {
+    const data = content.data;
     params.encoding = 'blob';
-    params.content = content.data.blobId;
+    params.content = data.blobId+'#'+data.offset+'#'+data.size;
   } else if (Array.isArray(content)) {
     params.encoding = 'base64';
     params.content = content.shift();
@@ -15,7 +16,7 @@ export default function(Archives, file, content, flag) {
   if (flag === true) {
     params.append = true;
   } else {
-    const position = utils.getNumber(flag, null);
+    const position = getNumber(flag, null);
     if (position !== null) {
       params.position = position;
     }

@@ -14,15 +14,18 @@
 
 ```js
 import {
-    dirs, 
-    external, 
-    status, 
-    utils, 
     fs, 
+    utils, 
+    dirs, 
+    status, 
+    external, 
     fetchPlus, 
     HttpService
 } from "react-native-archives"
 ```
+
+https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/FileSystemProgrammingGuide/FileSystemOverview/FileSystemOverview.html
+
 
 
 ## dirs
@@ -31,38 +34,81 @@ import {
 
 ```js
 dirs:{
-    MainBundle:"",  // 安装包位置(一般为只读)
-    Document:"",    // 个人文件保存目录
-    Library:"",     // app 配置文件保存目录
-    Caches: "",     // 缓存文件保存目录
-    Temporary:"",   // 临时文件保存目录
+    // 安装包位置
+    // 二者可以使用 zip 解码读取
+    MainBundle:"",  
+      // Android: /data/app/com.vendor.product-.../base.apk
+      // iOS: /prefix/Bundle/Application/E57.../project.app
+
+    // 个人文件保存目录，可以创建子文件夹
+    // 保存用户的私有文件，云同步时一般都会同步该文件夹
+    Document:"",    
+      // Android: /data/user/0/com.vendor.product/files
+      // iOS: /prefix/Data/Application/F18.../Documents
+
+    // app 配置文件保存目录，可以创建子文件夹
+    // iOS 默认有 "Caches"/"Preferences" 两个文件夹
+    // (Preferences 可存放一些用户的偏好设置)
+    // 云同步会同步除 "Caches" 文件夹之外的所有文件
+    // Android 云同步规则未知
+    Library:"",     
+      // Android: /data/user/0/com.vendor.product/files
+      // iOS: /prefix/Data/Application/F18.../Library
+
+    // 缓存文件保存目录
+    // 用于存放不重要，删除了也没影响，但希望尽量不要删除的文件
+    Caches: "",     
+      // Android: /data/user/0/com.vendor.product/cache
+      // iOS: /prefix/Data/Application/F18.../Library/Caches
+
+    // 临时文件保存目录
+    // 存放随时可删除而不影响运行的临时文件
+    Temporary:"",   
+      // Android: /data/user/0/com.vendor.product/cache
+      // iOS: /prefix/Data/Application/F18.../tmp
 }
 ```
 
+
+
 ## external
 
-Android 上的，外部存储目录，有可能在 SD 卡中，若手机没有 SD 卡，一般也可用，系统虚拟出来的外部存储目录。
+Android only (iOS 仅能访问 app 所属沙盒目录)，外部存储目录，有可能在 SD 卡中，若手机没有 SD 卡，一般也可用，系统虚拟出来的外部存储目录。
 
 若需要保存较大文件，建议存在这个系列的目录下，而不是 dirs 目录下
 
 ```js
 external:{
-    // app 缓存、文件目录，在外部存储上，但会随着 app 的卸载而删除
-    AppCaches: "",   
-    AppDocument:"",
+    // app 在外部存储上的缓存、文件目录，也会随着 app 的卸载而删除
+    AppCaches: "",
+      // Android: /storage/emulated/0/Android/data/com.vendor.product/cache
 
-    // 以下是公用目录，存储的文件不会随着 app 卸载而删除, 需要额外申请权限
+    AppDocument:"",
+      // Android: /storage/emulated/0/Android/data/com.vendor.product/files
+ 
+
+    // 以下是所有 app 的公用目录，存储的文件不会随着 app 卸载而删除, 需要额外申请权限
 
     Root:"",    // 外部存储根目录
+      // Android: /storage/emulated/0
     Music:"",   // 音乐文件夹
+      // Android: /storage/emulated/0/Music
     Picture:"",   // 图片
+      // Android: /storage/emulated/0/Pictures
     DCIM:"",   // 相片
+      // Android: /storage/emulated/0/DCIM
     Movie:"",   // 影音
+      // Android: /storage/emulated/0/Movies
     Download:"",   // 下载
+      // Android: /storage/emulated/0/Download
     Podcasts:"",   // 播客，订阅
+      // Android: /storage/emulated/0/Podcasts
     Ringtones:"",   // 来电铃声
+      // Android: /storage/emulated/0/Ringtones
     Alarms:"",      // 闹钟
+      // Android: /storage/emulated/0/Alarms
     Notifications:"",   // 通知铃声
+      // Android: /storage/emulated/0/Notifications
 }
 ```
 
@@ -73,6 +119,8 @@ external:{
 ```js
 status: {
     downloadRootDir: "",  //热更包保存路径
+      // Android: /data/user/0/com.vendor.product/files/_epush
+      // iOS: 
     packageVersion: "",   //当前包主版本
     currentVersion: "",   //当前热更版本
     isFirstTime: "",      //是否为该热更版本首次运行(需手动标记为成功)
