@@ -217,7 +217,6 @@ async function fetchFile(url, params) {
     blob.close();
     blob = slice;
   }
-  let txt = await utils.readBlob(blob, 'text');
   if (resBlob) {
     return blob;
   }
