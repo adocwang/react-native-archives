@@ -24,8 +24,10 @@ import java.lang.reflect.Field;
 import java.security.MessageDigest;
 
 import android.net.Uri;
+import android.text.TextUtils;
 import android.util.Base64;
 import android.database.Cursor;
+import android.webkit.MimeTypeMap;
 import android.provider.BaseColumns;
 import android.os.AsyncTask;
 import android.os.ParcelFileDescriptor;
@@ -420,6 +422,16 @@ class ArchivesManager extends AsyncTask<ArchivesParams, Void, Void> {
             res.putString("blobId", blob.store(content));
             res.putInt("offset", 0);
             res.putInt("size", content.length);
+
+            MimeTypeMap map = MimeTypeMap.getSingleton();
+            int index = param.filepath.lastIndexOf(".");
+            if (index != -1) {
+                String suffix = param.filepath.substring(index + 1).toLowerCase();
+                String mime = TextUtils.isEmpty(suffix) ? null : map.getMimeTypeFromExtension(suffix);
+                if (!TextUtils.isEmpty(mime)) {
+                    res.putString("type", mime);
+                }
+            }
             param.onSuccess(res);
             return;
         }

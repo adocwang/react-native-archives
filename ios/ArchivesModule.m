@@ -18,9 +18,10 @@
 @implementation DocumentPreview
 - (instancetype)initWithOptions:(NSDictionary *)options block:(void (^_Nullable)(NSString *event))eventBlock {
     if(self = [super init]) {
-        NSString *ext = options[@"ext"];
         NSString *file = options[@"file"];
+        NSString *mime = options[@"mime"];
         NSString *name = options[@"title"];
+        NSString *ext = [mime length] > 0 ? [DocumentPreview getExtension:mime] : NULL;
         if ([ext length] > 0) {
             NSError *error = nil;
             NSString *uuid =[[NSUUID UUID] UUIDString];
@@ -42,6 +43,17 @@
         self.rootViewController = [[[[UIApplication sharedApplication] delegate] window] rootViewController];
     }
     return self;
+}
+
++ (NSString *)getExtension:(NSString *)mimeType
+{
+    NSRange range = [mimeType rangeOfString:@";"];
+    if (range.length > 0) {
+        mimeType = [mimeType substringToIndex:range.location];
+    }
+    NSString *UTI = (__bridge_transfer NSString *)UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, (__bridge CFStringRef)mimeType, NULL);
+    NSString *extension = (__bridge_transfer NSString *)UTTypeCopyPreferredTagWithClass((__bridge CFStringRef)UTI, kUTTagClassFilenameExtension);
+    return extension;
 }
 
 - (UIViewController *)documentInteractionControllerViewControllerForPreview:(UIDocumentInteractionController *)controller {
@@ -107,6 +119,17 @@ RCT_EXPORT_MODULE()
               @"downloadRootDir": NSTemporaryDirectory()
       }
   };
+}
+
+RCT_EXPORT_METHOD(getExtension:(NSArray *)types
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+    NSMutableArray *exts = [[NSMutableArray alloc] init];
+    for (NSString *type in types) {
+        [exts addObject:[DocumentPreview getExtension:type]];
+    }
+    return resolve(exts);
 }
 
 RCT_EXPORT_METHOD(getMimeType:(NSArray *)names

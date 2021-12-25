@@ -138,15 +138,39 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void getMimeType(ReadableArray names, Promise promise) {
+        getStuffFromStr(names, promise, true);
+    }
+
+    @ReactMethod
+    public void getExtension(ReadableArray names, Promise promise) {
+        getStuffFromStr(names, promise, false);
+    }
+
+    private void getStuffFromStr(ReadableArray names, Promise promise, Boolean mimeType) {
         String[] input = new String[names.size()];
         for (int i = 0; i < names.size(); i++) {
             input[i] = names.getString(i);
         }
         WritableArray output = Arguments.createArray();
-        for (String rs: getMimeTypeFromStr(input, true)) {
+        for (String rs: mimeType ? getMimeTypeFromStr(input, true) : getExtensionFromStr(input)) {
             output.pushString(rs);
         }
         promise.resolve(output);
+    }
+
+    private String[] getExtensionFromStr(String[] names) {
+        String[] output = new String[names.length];
+        MimeTypeMap map = MimeTypeMap.getSingleton();
+        for (int i = 0; i< names.length; i++) {
+            String mimeType = names[i].toLowerCase();
+            int index = mimeType.lastIndexOf(";");
+            if (index > 0) {
+                mimeType = mimeType.substring(0, index);
+            }
+            String extension = TextUtils.isEmpty(mimeType) ? null : map.getExtensionFromMimeType(mimeType);
+            output[i] = TextUtils.isEmpty(extension) ? null : extension;
+        }
+        return output;
     }
 
     private String[] getMimeTypeFromStr(String[] names, boolean setDef) {
@@ -620,9 +644,6 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
             Uri uri = Uri.parse(url);
             DownloadManager.Request req = new DownloadManager.Request(uri);
             String mime = options.hasKey("mime") ? options.getString("mime") : null;
-            if (TextUtils.isEmpty(mime)) {
-                mime = getMimeTypeFromStr(new String[]{url}, false)[0];
-            }
             if(!TextUtils.isEmpty(mime)) {
                 req.setMimeType(mime);
             }
@@ -868,16 +889,16 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         }
         String fileName = file.getName();
         String title = options.hasKey("title") ? options.getString("title") : null;
-        String des = options.hasKey("description") ? options.getString("description") : null;
         String mime = options.hasKey("mime") ? options.getString("mime") : null;
+        String des = options.hasKey("description") ? options.getString("description") : null;
         if (TextUtils.isEmpty(title)) {
             title = fileName;
         }
-        if (TextUtils.isEmpty(des)) {
-            des = " ";
-        }
         if (TextUtils.isEmpty(mime)) {
             mime = getMimeTypeFromStr(new String[]{fileName}, true)[0];
+        }
+        if (TextUtils.isEmpty(des)) {
+            des = " ";
         }
         boolean showNotification = !options.hasKey("quiet") || !options.getBoolean("quiet");
         try {
@@ -915,11 +936,11 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
                 uri = Uri.parse("file://" + path);
             }
             int reqId = options.hasKey("reqId") ? options.getInt("reqId") : 0;
-            String ext = options.hasKey("ext") ? options.getString("ext") : null;
+            String mime = options.hasKey("mime") ? options.getString("mime") : null;
             String title = options.hasKey("title") ? options.getString("title") : null;
-            String mime = getMimeTypeFromStr(new String[]{
-                    TextUtils.isEmpty(ext) ? path : "file." + ext
-            }, true)[0];
+            if (TextUtils.isEmpty(mime)) {
+                mime = getMimeTypeFromStr(new String[]{path}, true)[0];
+            }
             Intent intent = new Intent();
             if (!TextUtils.isEmpty(title)) {
                 intent.putExtra(Intent.EXTRA_SUBJECT, title);

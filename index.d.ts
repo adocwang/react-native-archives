@@ -120,7 +120,7 @@ declare namespace archives {
   }
 
   interface OpenFileOptions {
-    ext?: string,
+    mime?: string,
     title?: string,
     onClose?: (() => any) | null,
   }
@@ -259,6 +259,7 @@ declare const archives: {
 
     openFile(file: string, options?: archives.OpenFileOptions): Promise<null>;
     getMime(file: string | Array<string>): Promise<string | Array<string>>;
+    getExt(mime: string | Array<string>): Promise<string | Array<string>>;
     getHash(file: string, algorithm?: archives.algorithm_): Promise<string>;
     loadFont(fontName: string, file: string): Promise<null>;
 

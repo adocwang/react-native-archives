@@ -1291,20 +1291,54 @@ class ArchivesTest extends React.PureComponent {
     });
     self.prtLog('open file success')
   }
-  
+
+  openFile2 = async () => {
+    const self = this;
+    const file = dirs.Caches + '/_arch_test_addown_';
+    const test = await fs.isDir(file);
+    if (false !== test) {
+      await fetchPlus({
+        url:RemoteJpg,
+        saveTo: file
+      })
+    }
+    await fs.openFile(file, {
+      mime: "image/jpeg",
+      title: "Test File",
+      onClose:() => {
+        self.prtLog('open file closed')
+        fs.unlink(file);
+      }
+    });
+    self.prtLog('open file success')
+  }
+
   getMime = async () => {
     const self = this;
     let mime, except;
     mime = await fs.getMime('foo.txt');
     self.showLog('getMime', except = 'text/plain', mime, except === mime);
     
-    mime = await fs.getMime(['foo.txt', 'foo.png']);
+    mime = await fs.getMime(['path/foo.txt', 'foo.png']);
     self.showLog(
       'getMime', except = ['text/plain', 'image/png'], mime,
       JSON.stringify(except) === JSON.stringify(mime)
     );
   }
-  
+
+  getExt = async () => {
+    const self = this;
+    let ext, except;
+    ext = await fs.getExt('text/plain');
+    self.showLog('getExt', except = 'txt', ext, except === ext);
+    
+    ext = await fs.getExt(['text/plain;utf-8', 'image/png']);
+    self.showLog(
+      'getExt', except = ['txt', 'png'], ext,
+      JSON.stringify(except) === JSON.stringify(ext)
+    );
+  }
+
   getHash = async () => {
     const self = this;
     self.prtLog('✸✸ check get special file hash ✸✸');
@@ -1517,7 +1551,9 @@ class ArchivesTest extends React.PureComponent {
         <MyButton title="fs.moveFile" onPress={this.moveFile}/>
         <MyButton title="fs.unlink" onPress={this.unlink}/>
         <MyButton title="fs.openFile" onPress={this.openFile}/>
+        <MyButton title="fs.openFile2" onPress={this.openFile2}/>
         <MyButton title="fs.getMime" onPress={this.getMime}/>
+        <MyButton title="fs.getExt" onPress={this.getExt}/>
         <MyButton title="fs.getHash" onPress={this.getHash}/>
         <MyButton title="fs.loadFont" onPress={this.loadFont}>
           {this.state.font ? <Text style={{

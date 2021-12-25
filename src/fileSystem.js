@@ -267,6 +267,26 @@ function checkMd5(md5, MustSet) {
   return null;
 }
 
+async function getStuff(stuffs, ext) {
+  const isArr = Array.isArray(stuffs);
+  return new Promise(resolve => {
+    if (isArr && !stuffs.length) {
+      resolve([]);
+      return;
+    }
+    if (!isArr) {
+      if (!stuffs) {
+        resolve(null);
+        return;
+      }
+      stuffs = [stuffs];
+    }
+    ArchivesModule[ext ? 'getExtension' : 'getMimeType'](stuffs).then(r => {
+      resolve(isArr ? r : r[0])
+    })
+  })
+}
+
 // filesystem 导出, 以下方法如无特殊说明, async 函数返回 Promise<null>, 执行失败会抛出异常
 const fs = {
   // path  : 支持所有 scheme 路径
@@ -368,11 +388,11 @@ const fs = {
   /**
    * 支持 file:// content:// 路径
    * options: {
-   *   ext:'',   默认根据 file 后缀打开文件, 若无后缀或后缀不规范, 可需手动设置 ext (如 jpg,txt)
+   *   mime:'',  默认根据 file 后缀自动获取, 若无后缀或后缀不规范, 可需手动设置
    *   title:'', 标题, iOS 出现在文件打开后的标题栏, Android 通常无效, 要看第三方 app 是否支持
    *   onClose:Function(), 关闭文件后的回调监听
    * }
-   * 1. 在 Android 上将使用可以处理响应文件的 app 打开, 可能有多个供用户选择, 若无对应 APP 则打开失败.
+   * 1. 在 Android 上将使用可以处理文件的 app 打开, 可能有多个供用户选择, 若无对应 APP 则打开失败.
    *    由于文件打开后的操作将由第三方 APP 或组件接管, 不再受控, 用户可能可以进行保存、分享等操作
    *    若打开的文件为 apk 文件（即安装 app）, 需在 AndroidManifest.xml 中添加权限兼容 Android 8.0
    *    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -392,23 +412,12 @@ const fs = {
 
   // 从文件路径获取 mimeType, 根据文件后缀判断的, file 可以是 string 或 Array<string>
   async getMime(files) {
-    const isArr = Array.isArray(files);
-    return new Promise(resolve => {
-      if (isArr && !files.length) {
-        resolve([]);
-        return;
-      }
-      if (!isArr) {
-        if (!files) {
-          resolve(null);
-          return;
-        }
-        files = [files];
-      }
-      ArchivesModule.getMimeType(files).then(r => {
-        resolve(isArr ? r : r[0])
-      })
-    })
+    return await getStuff(files);
+  },
+
+  // 从 mimeType 获取对应 extension 后缀, mime 可以是 string 或 Array<string>
+  async getExt(mime) {
+    return await getStuff(mime, true);
   },
 
   // file: 支持所有 scheme 路径, algorithm 可指定算法, 比如 md5(默认), sha256;
@@ -549,8 +558,8 @@ const fs = {
   * 任务添加成功并不代表下载成功，下载过程中还有可能出现错误，可使用 onError 监听
   * options: {
   *   *url: 'http://',
-  *   mime:'',     缺省情况会根据文件后缀自动判断, 若为 url 文件后缀与mime不匹配, 需手工设置
-  *   destFile:'', 下载路径, 只能下载到 external 目录, 默认为私有目录 external.AppDocument/Download (无需权限),
+  *   mime:'',     默认情况下会根据请求 url 返回的 Response header 自动设置, 若不准确可手动设置 
+  *   destFile:'', 下载目录, 只能下载到 external 文件夹, 默认为 external.AppDocument/Download (无需权限),
   *                也可下载到 external 公共目录, 如 external.Download, 但需提前自行申请 WRITE_EXTERNAL_STORAGE 权限
   *   title:'',       下载通知中显示的标题
   *   description:'', 下载通知中显示的描述信息
@@ -573,7 +582,7 @@ const fs = {
   * [Android Only] 自行下载(如使用 fetch)一个文件后, 可使用该函数添加一个下载完毕的推送
   * options: {
   *   *file: '',  文件路径必须在 external 目录下, 否则点击通知无法打开文件
-  *   mime:'',
+  *   mime:'',    文件 mimeType, 打开文件会据此选择合适的 app, 默认根据文件后缀自动设置, 若不准确可手动设置
   *   title: '',
   *   description:'',
   *   quiet:Bool, 若true,用户可在下载文件管理中看到,不显示到推送栏
