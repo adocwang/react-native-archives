@@ -1,9 +1,96 @@
 import utils from './utils';
 import {getMime} from './fileSystem';
-import {RequestPlus, fetchExtend, fetchPlus} from './fetchPlus';
+import {RequestPlus, ResponsePlus, fetchExtend, fetchPlus} from './fetchPlus';
 const requestInit = fetchExtend.concat([
   'url', 'mode', 'method', 'signal', 'credentials', 'referrer'
 ]);
+
+// 支持 mock 功能
+class MockRes {
+  constructor(resolve, reject) {
+    this._headers = {};
+    this._resolve = resolve;
+    this.reject = reject;
+  }
+  status(code, text) {
+    this._code = code;
+    this._text = text;
+    return this;
+  }
+  header(key, value) {
+    if (typeof key === 'object') {
+      this._headers = {...this._headers, ...key};
+    } else {
+      this._headers[key] = value;
+    }
+    return this;
+  }
+  resolve(bodyInit) {
+    this._resolve(new ResponsePlus(bodyInit, {
+      status: this._code,
+      statusText: this._text,
+      headers: this._headers,
+    }))
+  }
+  send(bodyInit, delay) {
+    if (delay) {
+      setTimeout(() => this.resolve(bodyInit), delay);
+    } else {
+      this.resolve(bodyInit);
+    }
+  }
+}
+function isHttpUrl(url) {
+  return /^(http:\/\/|https:\/\/|\/\/)/i.test(url)
+}
+function removeUrlSalash(url) {
+  return '/' + url.replace(/([^:]\/)\/+/g, "$1").replace(/^\//g, '');
+}
+function parseMock(mock) {
+  const data = {};
+  Object.entries(mock||{}).forEach(([key, value]) => {
+    // 全局的 mock handle
+    if ('onRequest' === key) {
+      data.onRequest = value;
+      return;
+    }
+    // uri mock
+    const keys = key.split(' ').filter(item => item).slice(0, 2);
+    const method = keys.length > 1 ? keys[0].toUpperCase() : '_';
+    const uri = keys.length > 1 ? keys[1] : keys[0];
+    if (!(method in data)) {
+      data[method] = {};
+    }
+    data[method][isHttpUrl(uri) ? uri : removeUrlSalash(uri)] = value;
+  });
+  return Object.keys(data).length ? data : null;
+}
+function fetchRequest(input, httpReq) {
+  const service = httpReq.service;
+  const data = service.mockData;
+  if (data) {
+    const url = httpReq._request.url.split('#')[0].split('?')[0];
+    const method = input.method||(input.body ? 'POST' : 'GET');
+    const mock = method in data && url in data[method] ? data[method][url] : (
+      '_' in data && url in data._ ? data._[url] : null
+    );
+    if (mock) {
+      return new Promise(async (resolve, reject) => {
+        const req = new RequestPlus(input);
+        const res = new MockRes(resolve, reject);
+        try {
+          const pre = data.onRequest && (await Promise.resolve(data.onRequest(res, req, service)));
+          if (!pre) {
+            await Promise.resolve(mock(res, req, service));
+          }
+        } catch(e) {
+          reject(e);
+        }
+      });
+    }
+  }
+  return fetchPlus(input);
+};
 
 /** 
  * Reqeust kv 数据管理
@@ -164,7 +251,7 @@ async function sendRequest(req, method) {
     delete request.payload;
     if (null !== request.payload) {
       request.body = payload;
-      return fetchPlus(request);
+      return fetchRequest(request, req);
     }
   }
   // 是否有 params/files
@@ -176,7 +263,7 @@ async function sendRequest(req, method) {
       pkeys.length ? new URLSearchParams() : null
     );
   if (!form) {
-    return fetchPlus(request);
+    return fetchRequest(request, req);
   }
   // params
   pkeys.forEach(k => {
@@ -192,7 +279,7 @@ async function sendRequest(req, method) {
   });
   if (!fkeys.length) {
     request.body = form;
-    return fetchPlus(request);
+    return fetchRequest(request, req);
   }
   // files
   let index = 0;
@@ -238,7 +325,7 @@ async function sendRequest(req, method) {
     form.append(key, file);
   })
   request.body = form;
-  return fetchPlus(request);
+  return fetchRequest(request, req);
 }
 
 /* 
@@ -304,8 +391,9 @@ class HttpRequest {
   constructor(service, input, options) {
     options = options||{};
     this.service = service;
-    this._onError = service.onError.bind(service);
+    this._onRequest = service.onRequest.bind(service);
     this._onResponse = service.onResponse.bind(service);
+    this._onError = service.onError.bind(service);
 
     // request
     const request = {};
@@ -486,20 +574,23 @@ class HttpRequest {
     });
   }
   // 发送
-  send(method){
-    return sendRequest(this, method).then(
-      this._onResponse
-    ).catch(this._onError);
+  async send(method){
+    try {
+      const req = await this._onRequest(this);
+      const res = await sendRequest(req, method);
+      return await this._onResponse(res);
+    } catch(e) {
+      return await this._onError(e);
+    }
   }
   // 发送并获取返回的 json
   // 此类 API 较为常见, 但返回的是 json, 而不是 Reponse 对象
   // 在需要读取 text body 或 headers 的情况下不适用
   async json(method){
     const r = await this.send(method);
-    return r.json();
+    return await r.json();
   }
 }
-
 
 /* 导出类 
 不建议直接使用 HttpService, 而是在其基础进行扩展, 如
@@ -542,13 +633,13 @@ class Service extends HttpService {
   login(name, pass){
     return this.request('/login').param({
       name, pass
-    }, false).send()
+    }, false).json()
   }
   updateAvatar(file){
     return this.request('/updateAvatar')
       .withToken('dddd')
       .param('avatar', file)
-      .send()
+      .send('PUT')
   }
 }
 export default new Service('https://host.com');
@@ -582,17 +673,21 @@ class Page extends React.Component {
 }
 */
 class HttpService {
-  constructor(baseUrl) {
+  constructor(baseUrl, mockData) {
     this.baseUrl = baseUrl;
-  }
-  onError(err){
-    throw err;
-  }
-  onResponse(res){
-    return res;
+    this.mockData = parseMock(mockData);
   }
   request(input, options) {
     return new HttpRequest(this, input, options);
+  }
+  async onRequest(req){
+    return req;
+  }
+  async onResponse(res){
+    return res;
+  }
+  async onError(err){
+    throw err;
   }
 }
 
