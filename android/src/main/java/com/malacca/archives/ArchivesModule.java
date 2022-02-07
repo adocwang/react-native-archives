@@ -10,7 +10,6 @@ import java.util.concurrent.Executors;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
-import android.content.ActivityNotFoundException;
 import android.util.Log;
 import android.util.LongSparseArray;
 import android.app.Activity;
@@ -34,6 +33,7 @@ import android.database.Cursor;
 import android.graphics.Typeface;
 import android.webkit.MimeTypeMap;
 import androidx.annotation.NonNull;
+import android.media.MediaScannerConnection;
 import androidx.core.content.res.ResourcesCompat;
 
 import com.facebook.react.ReactApplication;
@@ -212,7 +212,7 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
     }
 
     /**
-     * file 支持的路径
+     * 获取文件 hash 值, file 支持的路径
      * 1. ContentResolver 类型
      *    ContentResolver.SCHEME_FILE [file://]/data/xx  (file scheme 可省略)
      *    ContentResolver.SCHEME_CONTENT  content://xxx
@@ -234,7 +234,7 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         runManagerTask(params, ArchivesParams.TASK.GET_HASH);
     }
 
-    // 获取私有文件的 content:// 路径, 可共享给其他 APP
+    // 获取当前 App 私有文件的 content:// 路径, 可共享给其他 APP
     @ReactMethod
     public void getShareUri(String path, final Promise promise) {
         try {
@@ -401,6 +401,29 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         // 这里借用一下 append 字段, 可设置在 dest 已存在的情况下, 是否覆盖
         params.append = options.hasKey("overwrite") && options.getBoolean("overwrite");
         runManagerTask(params, copy ? ArchivesParams.TASK.COPY_FILE : ArchivesParams.TASK.MOVE_FILE);
+    }
+
+    // 扫描指定文件到用户相册中
+    @ReactMethod
+    public void scanFile(String path, final Promise promise){
+        if ((path = getFilePath(path, promise, "file path")) == null) {
+            return;
+        }
+        MediaScannerConnection.scanFile(
+                rnContext,
+                new String[]{path},
+                null,
+                new MediaScannerConnection.OnScanCompletedListener() {
+                    @Override
+                    public void onScanCompleted(String path, Uri uri) {
+                        if (uri != null) {
+                            promise.resolve(uri.toString());
+                        } else {
+                            promise.reject("E_UNABLE_TO_SAVE", "Could not add image to gallery");
+                        }
+                    }
+                }
+        );
     }
 
     private String getFilePath(String path, Promise promise, String msg) {

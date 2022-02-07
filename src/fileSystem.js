@@ -524,6 +524,19 @@ const fs = {
     });
   },
 
+  // [iOS Only] 保存文件到相册, file支持 file://, http://, data://base64; 
+  // options:{type, album} 通过 album 设置相册名称; type='photo|video' 指明文件是图片还是视频
+  async saveToCameraRoll(file, options){
+    checkOs('saveToCameraRoll', true);
+    return await ArchivesModule.saveToCameraRoll(file, options)
+  },
+
+  // [Android Only] 将制定的 file:// 路径文件添加到相册
+  async scanFile(file){
+    checkOs('scanFile');
+    return await ArchivesModule.scanFile(file)
+  },
+
   // [Android Only] 获取 APP 私有文件的 content:// 路径, 可共享给其他 APP 读取, 
   // 比如 openFile 函数, 就是利用该特性; 这里暴露一个方法, 比如可以用在分享图片到微信
   async getShareUri(file){

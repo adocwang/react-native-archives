@@ -1,4 +1,5 @@
 #import "ArchivesModule.h"
+#import <Photos/Photos.h>
 #import <CoreText/CoreText.h>
 #import <React/RCTBlobManager.h>
 #import <React/RCTReloadCommand.h>
@@ -719,4 +720,123 @@ RCT_EXPORT_METHOD(markSuccess:(RCTPromiseResolveBlock)resolve
 {
     return reject(RCTErrorMissing, @"markSuccess is not implemented yet", nil);
 }
+
+
+// 以下代码来自于 react-native-cameraroll, 因为 react-native-archives 的 Android 部分已顺手支持了保存到相册
+// 所以再额外安装 react-native-cameraroll 略有浪费, 所以复制了以下代码让 iOS 同时支持保存到相册功能
+// https://github.com/react-native-cameraroll/react-native-cameraroll/blob/master/ios/RNCCameraRollManager.m
+typedef void (^PhotosAuthorizedBlock)(bool isLimited);
+static NSString *const kErrorUnableToSave = @"E_UNABLE_TO_SAVE";
+static NSString *const kErrorAuthDenied = @"E_PHOTO_LIBRARY_AUTH_DENIED";
+static NSString *const kErrorAuthRestricted = @"E_PHOTO_LIBRARY_AUTH_RESTRICTED";
+
+static void requestPhotoLibraryAccess(RCTPromiseRejectBlock reject, PhotosAuthorizedBlock authorizedBlock) {
+  PHAuthorizationStatus authStatus;
+  if (@available(iOS 14, *)) {
+    authStatus = [PHPhotoLibrary authorizationStatusForAccessLevel:PHAccessLevelReadWrite];
+  } else {
+    authStatus = [PHPhotoLibrary authorizationStatus];
+  }
+  if (authStatus == PHAuthorizationStatusRestricted) {
+    reject(kErrorAuthRestricted, @"Access to photo library is restricted", nil);
+  } else if (authStatus == PHAuthorizationStatusAuthorized) {
+    authorizedBlock(false);
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability-new"
+  } else if (authStatus == PHAuthorizationStatusLimited) {
+#pragma clang diagnostic pop
+    authorizedBlock(true);
+  } else if (authStatus == PHAuthorizationStatusNotDetermined) {
+      if (@available(iOS 14, *)) {
+          [PHPhotoLibrary requestAuthorizationForAccessLevel:PHAccessLevelReadWrite handler:^(PHAuthorizationStatus status) {
+              requestPhotoLibraryAccess(reject, authorizedBlock);
+          }];
+      } else {
+          [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus status) {
+              requestPhotoLibraryAccess(reject, authorizedBlock);
+          }];
+      }
+  } else {
+    reject(kErrorAuthDenied, @"Access to photo library was denied", nil);
+  }
+}
+
+RCT_EXPORT_METHOD(saveToCameraRoll:(NSURLRequest *)request
+                  options:(NSDictionary *)options
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  __block NSURL *inputURI = nil;
+  __block PHFetchResult *photosAsset;
+  __block PHAssetCollection *collection;
+  __block PHObjectPlaceholder *placeholder;
+
+  void (^saveBlock)(void) = ^void() {
+    // performChanges and the completionHandler are called on
+    // arbitrary threads, not the main thread - this is safe
+    // for now since all JS is queued and executed on a single thread.
+    // We should reevaluate this if that assumption changes.
+
+    [[PHPhotoLibrary sharedPhotoLibrary] performChanges:^{
+      PHAssetChangeRequest *assetRequest ;
+      if ([options[@"type"] isEqualToString:@"video"]) {
+        assetRequest = [PHAssetChangeRequest creationRequestForAssetFromVideoAtFileURL:inputURI];
+      } else {
+        NSData *data = [NSData dataWithContentsOfURL:inputURI];
+        UIImage *image = [UIImage imageWithData:data];
+        assetRequest = [PHAssetChangeRequest creationRequestForAssetFromImage:image];
+      }
+      placeholder = [assetRequest placeholderForCreatedAsset];
+      if (![options[@"album"] isEqualToString:@""]) {
+        photosAsset = [PHAsset fetchAssetsInAssetCollection:collection options:nil];
+        PHAssetCollectionChangeRequest *albumChangeRequest = [PHAssetCollectionChangeRequest changeRequestForAssetCollection:collection assets:photosAsset];
+        [albumChangeRequest addAssets:@[placeholder]];
+      }
+    } completionHandler:^(BOOL success, NSError *error) {
+      if (success) {
+        NSString *uri = [NSString stringWithFormat:@"ph://%@", [placeholder localIdentifier]];
+        resolve(uri);
+      } else {
+        reject(kErrorUnableToSave, nil, error);
+      }
+    }];
+  };
+
+  void (^saveWithOptions)(void) = ^void() {
+    if (![options[@"album"] isEqualToString:@""]) {
+      PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
+      fetchOptions.predicate = [NSPredicate predicateWithFormat:@"title = %@", options[@"album"] ];
+      collection = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeAlbum
+                                                            subtype:PHAssetCollectionSubtypeAny
+                                                            options:fetchOptions].firstObject;
+      // Create the album
+      if (!collection) {
+        [[PHPhotoLibrary sharedPhotoLibrary] performChanges:^{
+          PHAssetCollectionChangeRequest *createAlbum = [PHAssetCollectionChangeRequest creationRequestForAssetCollectionWithTitle:options[@"album"]];
+          placeholder = [createAlbum placeholderForCreatedAssetCollection];
+        } completionHandler:^(BOOL success, NSError *error) {
+          if (success) {
+            PHFetchResult *collectionFetchResult = [PHAssetCollection fetchAssetCollectionsWithLocalIdentifiers:@[placeholder.localIdentifier]
+                                                                                                        options:nil];
+            collection = collectionFetchResult.firstObject;
+            saveBlock();
+          } else {
+            reject(kErrorUnableToSave, nil, error);
+          }
+        }];
+      } else {
+        saveBlock();
+      }
+    } else {
+      saveBlock();
+    }
+  };
+
+  void (^loadBlock)(bool isLimited) = ^void(bool isLimited) {
+    inputURI = request.URL;
+    saveWithOptions();
+  };
+  requestPhotoLibraryAccess(reject, loadBlock);
+}
+
 @end

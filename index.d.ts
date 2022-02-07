@@ -151,6 +151,11 @@ declare namespace archives {
     quiet?: boolean,
   }
 
+  interface CameraRollOptions {
+    album?: string,
+    type?: 'photo' | 'video' | 'auto',
+  }
+
   type encoding_ = 'text' | 'blob' | 'base64' | 'buffer' | 'uri';
   type algorithm_ = 'md5' | 'sha1' | 'sha224' | 'sha256' | 'sha384' | 'sha512';
 }
@@ -272,6 +277,8 @@ declare const archives: {
     markSuccess(): Promise<null>;
     reload(): Promise<null>;
 
+    saveToCameraRoll(file: string, options:archives.CameraRollOptions): Promise<string>;
+    scanFile(file: string): Promise<string>;
     getShareUri(file: string): Promise<string>;
     getContentUri(mediaType?: string, type?: string): Promise<string>;
     download(options: archives.AndroidDownloadOptions): Promise<null>;
