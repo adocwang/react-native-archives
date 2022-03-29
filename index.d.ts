@@ -97,12 +97,21 @@ declare namespace archives {
     file(key:string|Array<string>, value:object|Array<object>|null, append?:boolean): this;
     file(files:object|null, flag?:boolean): this;
 
+    bag(): object;
+    bag(key: string|Array<string>): string|Array<string>|object;
+    bag(key:string|Array<string>, value:string|Array<string>|null): this;
+    bag(bags:object|null, flag?:boolean): this;
+
     auth(token: string|null): this;
     userAgent(userAgent: string|null): this;
     asAjax(): this;
 
+    skipOnRequest(skip: Boolean|undefined): this;
+    skipOnResponse(skip: Boolean|undefined): this;
+
     send(method: string): Promise<ResponsePlus>;
     json(method: string): Promise<object>;
+    clone(): HttpRequest;
   }
 
   interface HttpService extends Object {
@@ -110,6 +119,8 @@ declare namespace archives {
       input: string | Request | RequestInitPlus | RequestPlus,
       init?: RequestInitPlus
     ): HttpRequest;
+    onRequest(req:HttpRequest): Promise<HttpRequest>;
+    onResponse(res:ResponsePlus, req:HttpRequest): Promise<ResponsePlus>;
   }
 
   interface FileItem extends Object{

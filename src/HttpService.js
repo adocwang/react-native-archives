@@ -7,7 +7,8 @@ const requestInit = fetchExtend.concat([
 
 // 支持 mock 功能
 class MockRes {
-  constructor(resolve, reject) {
+  constructor(resolve, reject, url) {
+    this._url = url;
     this._headers = {};
     this._resolve = resolve;
     this.reject = reject;
@@ -30,6 +31,7 @@ class MockRes {
       status: this._code,
       statusText: this._text,
       headers: this._headers,
+      url: this._url
     }))
   }
   send(bodyInit, delay) {
@@ -69,15 +71,15 @@ function fetchRequest(input, httpReq) {
   const service = httpReq.service;
   const data = service.mockData;
   if (data) {
-    const url = httpReq._request.url.split('#')[0].split('?')[0];
     const method = input.method||(input.body ? 'POST' : 'GET');
+    const url = httpReq._request.url.split('#')[0].split('?')[0];
     const mock = method in data && url in data[method] ? data[method][url] : (
       '_' in data && url in data._ ? data._[url] : null
     );
     if (mock) {
       return new Promise(async (resolve, reject) => {
         const req = new RequestPlus(input);
-        const res = new MockRes(resolve, reject);
+        const res = new MockRes(resolve, reject, input.url);
         try {
           const pre = data.onRequest && (await Promise.resolve(data.onRequest(res, req, service)));
           if (!pre) {
@@ -342,6 +344,7 @@ async function sendRequest(req, method) {
       .cookie('c', 'c')
       .param('x', 'x')
       .file('img', {})
+      .bag('x', 'x')
       .payload('aa')
       .onHeader(h => {});
 
@@ -353,7 +356,12 @@ async function sendRequest(req, method) {
     request.send();
     request.send('PUT');
 
-二、如果是 POST, 设置的 body 的优先级将按照以下顺序
+二、参数设置函数都支持类似 manageProps 的使用方法, 有 header/query/cookie/param/file/bag
+   bag 为特殊参数, 不参与到实际请求, 仅用于携带参数, 以便后续 hook 作为判断条件
+   比如在 onRequest/onResponse 或其他自行扩充的快捷方法中, 可通过获取 request bag 参数
+   作为判断条件, 以便进一步处理
+
+三、如果是 POST, 设置的 body 的优先级将按照以下顺序
   1.payload(
       null|string|URLSearchParams|FormData|Blob|ArrayBuffer|DataView
     )
@@ -364,13 +372,13 @@ async function sendRequest(req, method) {
     那么通过 param() / file() 所设键值对将与初始化参数合并后作为 post body
     否则将忽略初始化的参数, 仅以 param() / file() 所设值最为 post body
 
-三、关于 cookie
+四、关于 cookie
    RN 请求网站后, 会将网站响应的 set-cookie 缓存起来, 下次请求会携带缓存的 cookie;
    也可以通过 cookie() 或 header() 方法手动设置的 header cookie.
    但二者只能发送其一, 而不能合并后发送。默认情况下，手动设置的 header cookie 优先级高.
-   可以通过 credentials(true|false) 强制设置是否发送缓存的 cookie
+   另外还可以通过 credentials(true|false) 强制设置是否发送 RN 缓存的 cookie
 
-四、关于使用 file() 方法上传文件
+五、关于使用 file() 方法上传文件
   1.在已知情况下, 尽量完整设置
     request.file('fileName', {
       uri: (String) fileUri,
@@ -381,12 +389,16 @@ async function sendRequest(req, method) {
   2.也可直接设置 uri,会根据后缀自动设置 type
     request.file('fileName', uri);
 
-  3.参数 uri 允许
+  3.文件参数 uri 允许
     1. 绝对路径 /data/
     2. file://
     3. content:// (android only)
     4. assets-library:// (iOS only)
 */
+const HttpRequestProps = [
+  '_request', '_headers', ' _cookies',
+  '_queries', '_params', '_files', '_bags'
+];
 class HttpRequest {
   constructor(service, input, options) {
     options = options||{};
@@ -447,6 +459,7 @@ class HttpRequest {
         }
       }
     }
+    this._bags = {};
     this._queries = {};
     this._files = files;
     this._params = params;
@@ -559,6 +572,9 @@ class HttpRequest {
   file(){
     return manageProps(this, '_files', arguments);
   }
+  bag(){
+    return manageProps(this, '_bags', arguments);
+  }
   // 设置 header 的快捷方法 
   auth(token) {
     return this.header('Authorization', token);
@@ -573,12 +589,21 @@ class HttpRequest {
       'X-Requested-With': 'XMLHttpRequest',
     });
   }
+  // 设置是否跳过 service 的全局 hook
+  skipOnRequest(skip){
+    this._skipOnRequest = undefined === skip ? true : Boolean(skip);
+    return this;
+  }
+  skipOnResponse(skip){
+    this._skipOnResponse = undefined === skip ? true : Boolean(skip);
+    return this;
+  }
   // 发送
   async send(method){
     try {
-      const req = await this._onRequest(this);
+      const req = this._skipOnRequest ? this : await this._onRequest(this);
       const res = await sendRequest(req, method);
-      return await this._onResponse(res);
+      return this._skipOnResponse ? res : await this._onResponse(res, req);
     } catch(e) {
       return await this._onError(e);
     }
@@ -590,6 +615,20 @@ class HttpRequest {
     const r = await this.send(method);
     return await r.json();
   }
+  clone(){
+    const self = this;
+    const req = new HttpRequest(self.service);
+    HttpRequestProps.forEach(key => {
+      req[key] = {...self[key]}
+    });
+    if (undefined !== self._skipOnRequest) {
+      req._skipOnRequest = self._skipOnRequest;
+    }
+    if (undefined !== self._skipOnResponse) {
+      req._skipOnResponse = self._skipOnResponse;
+    }
+    return req;
+  }
 }
 
 /* 导出类 
@@ -600,33 +639,30 @@ class Service extends HttpService {
   onError(err){
     throw err;
   }
-  
+
+  // 可针对当前 Service 所有 request 集中进行通用处理
+  // 比如在请求中添加一些通用 header
+  onRequest(req:HttpRequest){
+    req.header('Authorization', 'token');
+    return req;
+  }
+
   // 可针对当前 Service 所有 response 集中进行通用处理
   // 比如默认情况下 fetch 404 也被认为是成功, 这里可以抛个错来中断
   // 且抛错在 onError 中也能捕获
-  onResponse(res){
+  onResponse(res:ResponsePlus, req:HttpRequest){
     if (!res.ok) {
       throw new TypeError('Network request failed')
     }
     return res;
   }
 
-  // 设计一个通用 header 的 api, 发送一些公用信息, 比如设备信息之类的
-  // 然后重写 request 方法, 带上通用 header
-  commonHeader = {};
-  setCommonHeader(header){
-    this.commonHeader = header;
-  }
-  request(input, init){
-    return super.request(input, init).header(this.commonHeader)
-  }
-
   // 可扩充一些快捷方法
-  asChrome(request){
-    request.userAgent('chrome/71')
+  asChrome(req:HttpRequest){
+    req.userAgent('chrome/71')
   }
-  withToken(request, token){
-    request.header('X-Reuest-Token', token)
+  withToken(req:HttpRequest, token){
+    req.header('X-Reuest-Token', token)
   }
   
   // API 举例

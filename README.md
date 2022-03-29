@@ -9,6 +9,26 @@
 
 `yarn add react-native-archives`
 
+Android
+
+```
+<manifest>
+...
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+...
+<application>
+```
+
+iOS
+
+```
+<key>NSPhotoLibraryUsageDescription</key>
+<string>请允许APP访问您的相册</string>
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>请允许APP保存图片到相册</string>
+```
+
 
 ## 使用
 
@@ -23,9 +43,6 @@ import {
     HttpService
 } from "react-native-archives"
 ```
-
-https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/FileSystemProgrammingGuide/FileSystemOverview/FileSystemOverview.html
-
 
 
 ## dirs

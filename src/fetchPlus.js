@@ -77,6 +77,9 @@ class PlainData {
     return JSON.stringify(this.data);
   }
 }
+const isPlainData = (data) => {
+  return PlainData.prototype.isPrototypeOf(data);
+}
 
 // RequestPlus: 继承并完善扩展 Request
 class RequestPlus extends Request {
@@ -140,7 +143,7 @@ class RequestPlus extends Request {
       this._bodyInit = original;
       if ('' === original) {
         this._bodyText = '';
-      } else if (PlainData.prototype.isPrototypeOf(original)) {
+      } else if (isPlainData(original)) {
         delete this._bodyArrayBuffer;
         this._bodyText = original.toString();
       }
@@ -149,7 +152,7 @@ class RequestPlus extends Request {
     if (!this.headers.get('content-type')) {
       if (this._bodyArrayBuffer) {
         this.headers.set('content-type', 'application/octet-stream');
-      } else if (PlainData.prototype.isPrototypeOf(this._bodyInit)) {
+      } else if (isPlainData(this._bodyInit)) {
         this.headers.set('content-type', 'application/json;charset=UTF-8');
       }
     }
@@ -173,14 +176,14 @@ class RequestPlus extends Request {
       : this.blob().then(r => r.arrayBuffer());
   }
   clone() {
-    return new RequestPlus(this, {body: this._bodyInit})
+    return new RequestPlus(this, {body: isPlainData(this._bodyInit) ? this._bodyInit.data : this._bodyInit})
   }
 }
 
 // ResponsePlus: 继承并完善扩展 Response
 class ResponsePlus extends Response {
+  // 与 RequestPlus 类似, 让 bodyInit 支持 DataView/Object|Array(转为 PlainData 缓存) 类型
   constructor(bodyInit, options) {
-    // 同 Request, 让 bodyInit 支持 DataView/PlainData(object|array) 类型
     var original;
     if (bodyInit) {
       if (DataView.prototype.isPrototypeOf(bodyInit)) {
@@ -194,7 +197,7 @@ class ResponsePlus extends Response {
     super(bodyInit, options);
     if (original) {
       this._bodyInit = original;
-      if (PlainData.prototype.isPrototypeOf(original)) {
+      if (isPlainData(original)) {
         delete this._bodyArrayBuffer;
         this._bodyText = original.toString();
       }
@@ -210,7 +213,7 @@ class ResponsePlus extends Response {
       : this.blob().then(r => r.arrayBuffer());
   }
   clone() {
-    return new ResponsePlus(this._bodyInit, {
+    return new ResponsePlus(isPlainData(this._bodyInit) ? this._bodyInit.data : this._bodyInit, {
       status: this.status,
       statusText: this.statusText,
       headers: new Headers(this.headers),
