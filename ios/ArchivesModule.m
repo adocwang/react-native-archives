@@ -102,22 +102,36 @@ RCT_EXPORT_MODULE()
 
 - (NSString *)getPathForDirectory:(int)directory
 {
-  NSArray *paths = NSSearchPathForDirectoriesInDomains(directory, NSUserDomainMask, YES);
-  return [paths firstObject];
+  return [NSSearchPathForDirectoriesInDomains(directory, NSUserDomainMask, YES) firstObject];
+}
+
+- (NSString *)packageVersion
+{
+    static NSString *version = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSDictionary *infoDictionary = [[NSBundle mainBundle] infoDictionary];
+        version = [infoDictionary objectForKey:@"CFBundleShortVersionString"];
+    });
+    return version;
 }
 
 - (NSDictionary *)constantsToExport
 {
   return @{
+      @"status": @{
+              @"downloadRootDir": [[self getPathForDirectory:NSApplicationSupportDirectory] stringByAppendingPathComponent:@"_epush"],
+              @"packageVersion": [self packageVersion],
+              @"currentVersion": [NSNull null],
+              @"isRolledBack": @NO,
+              @"isFirstTime": @NO,
+      },
       @"dirs": @{
               @"MainBundle": [[NSBundle mainBundle] bundlePath],
               @"Document": [self getPathForDirectory:NSDocumentDirectory],
               @"Library": [self getPathForDirectory:NSLibraryDirectory],
               @"Caches": [self getPathForDirectory:NSCachesDirectory],
               @"Temporary": NSTemporaryDirectory()
-      },
-      @"status": @{
-              @"downloadRootDir": NSTemporaryDirectory()
       }
   };
 }

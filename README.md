@@ -129,6 +129,9 @@ external:{
 }
 ```
 
+[iOS 目录](
+https://developer.apple.com/documentation/foundation/nssearchpathdirectory/nsapplicationsupportdirectory)
+
 ## status
 
 为热更提供的相关变量
