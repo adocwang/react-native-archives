@@ -290,9 +290,7 @@ async function sendRequest(req, method) {
   const sendFiles = [];
   fkeys.forEach(k => {
     let file = files[k];
-    if (Array.isArray(file)) {
-      k = k + '[]';
-    } else {
+    if (!Array.isArray(file)) {
       file = [file];
     }
     file.forEach(v => {
