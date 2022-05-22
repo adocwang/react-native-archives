@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  PermissionsAndroid,
 } from 'react-native';
 import {
   fs,
@@ -17,15 +18,14 @@ import {
   RequestPlus,
   ResponsePlus,
   HttpService
-} from "./index";
+} from "./../index";
 
 const IsAndroid = Platform.OS === 'android';
 const RemotePng = 'https://home.baidu.com/Public/img/logo.png';
-const RemoteDoc = "https://www.wordxxw.com/down/jianli/j1001/m117127.docx";
-const RemoteJpg = "https://images.pexels.com/photos/10070076/pexels-photo-10070076.jpeg";
-const RemoteTxt = "https://cdn.jsdelivr.net/gh/tanbots/repo@7713204df2a45093c99a5c5022ca21d05be18d08/test.txt";
-const RemoteZip = "https://cdn.jsdelivr.net/gh/tanbots/repo@21e40ab5c1a49ac376985431b2ee7d3296a02018/zip.txt";
-const RemoteApk = "https://lf9-apk.ugapk.cn/package/apk/video_article/1008_618/video_article_1451594b_v1008_618_3bf3_1637748551.apk";
+const RemoteDoc = "https://dev-4h9.pages.dev/hello.docx";
+const RemoteJpg = "https://dev-4h9.pages.dev/brige.jpeg";
+const RemoteTxt = "https://dev-4h9.pages.dev/str.txt";
+const RemoteZip = "https://dev-4h9.pages.dev/file.zip";
 
 function unicode(text) {
   text = text ? text.replace(/&#x(\w+);/g, (s, icon) => {
@@ -101,7 +101,8 @@ class ArchivesTest extends React.PureComponent {
   constructor(props) {
     super(props);
     this.state = {  
-      font: 0
+      remoteFont: 0,
+      localFont: 0,
     };
   }
   createButton(props) {
@@ -143,7 +144,7 @@ class ArchivesTest extends React.PureComponent {
     const tit = args.shift();
     const equal = args.pop();
     args.unshift(tit+':');
-    args.push(equal ? '✓' : '×');
+    args.unshift('【'+(equal ? '✓' : '×')+'】');
     console[equal ? 'log' : 'error'](...args)
   }
 
@@ -895,7 +896,7 @@ class ArchivesTest extends React.PureComponent {
           if (err) {
             self.showLog(d, err.message, false);
           } else {
-            self.prtLog(d + ':', lists);
+            self.showLog(d + ':', lists, true);
           }
           continue;
         }
@@ -933,6 +934,9 @@ class ArchivesTest extends React.PureComponent {
   }
 
   readDir = async () => {
+    if (IsAndroid) {
+      await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
+    }
     await this._getTestPaths(true);
     await this._makeTmpDir(true);
   }
@@ -1126,7 +1130,11 @@ class ArchivesTest extends React.PureComponent {
       self.showLog('read buffer offset', excpt = 'defg', middle, excpt === content);
     };
 
-    // local file
+    // remote file
+    self.prtLog('✸✸ read file ✸✸');
+    await checkRead(require('./str.html'));
+
+    // file
     self.prtLog('✸✸ read local file ✸✸');
     const file = dirs.Caches + '/_test_.txt';
     await fs.writeFile(file, expected);
@@ -1343,8 +1351,13 @@ class ArchivesTest extends React.PureComponent {
     const self = this;
     self.prtLog('✸✸ check get special file hash ✸✸');
     const temp = await this._getTestPaths();
-    let shash;
-    for (let path of temp.files) {
+    let path, shash;
+    if (!__DEV__) {
+      path = './str.html';
+      shash = await fs.getHash(require('./str.html'));
+      self.showLog(path, shash, true);
+    }
+    for (path of temp.files) {
       shash = await fs.getHash(path);
       self.showLog(path, shash, true);
     }
@@ -1377,19 +1390,32 @@ class ArchivesTest extends React.PureComponent {
     }
   }
 
-  loadFont = async () => {
+  remoteFont = async () => {
     const self = this;
-    const font = this.state.font;
+    const font = this.state.remoteFont;
     if (font) {
       self.showLog('font has loaded', true);
       return;
     }
-    const file = dirs.Caches + '/iconfont.ttf';
-    const url = "https://at.alicdn.com/t/font_2942213_xyipc7vf8ag.ttf?t=1637051352116";
+    const file = dirs.Caches + '/remotefont.ttf';
+    const url = "https://at.alicdn.com/t/font_3415031_w5ulq8d500h.ttf?t=1652968984755";
     await fetchPlus(url, {saveTo: file})
-    await fs.loadFont('iconfont', file);
-    this.setState({font: 1}, () => {
-      self.showLog('load font success', true);
+    await fs.loadFont('remotefont', file);
+    this.setState({remoteFont: 1}, () => {
+      self.showLog('load remoteFont success', true);
+    });
+  }
+
+  localFont = async () => {
+    const self = this;
+    const font = this.state.localFont;
+    if (font) {
+      self.showLog('font has loaded', true);
+      return;
+    }
+    await fs.loadFont('localFont', require('./localFont.ttf'));
+    this.setState({localFont: 1}, () => {
+      self.showLog('load localFont success', true);
     });
   }
 
@@ -1555,13 +1581,19 @@ class ArchivesTest extends React.PureComponent {
         <MyButton title="fs.getMime" onPress={this.getMime}/>
         <MyButton title="fs.getExt" onPress={this.getExt}/>
         <MyButton title="fs.getHash" onPress={this.getHash}/>
-        <MyButton title="fs.loadFont" onPress={this.loadFont}>
-          {this.state.font ? <Text style={{
-            fontFamily:'iconfont',
-            color: 'white'
-          }}>{unicode('&#xe995;')}</Text> : null}
-        </MyButton>
         <MyButton title="fs.unzip" onPress={this.unzip}/>
+        <MyButton title="fs.remoteFont" onPress={this.remoteFont}>
+          {this.state.remoteFont ? <Text style={{
+            fontFamily:'remotefont',
+            color: 'white'
+          }}>{unicode('&#xe8b9;')}</Text> : null}
+        </MyButton>
+        <MyButton title="fs.localFont" onPress={this.localFont}>
+          {this.state.localFont ? <Text style={{
+            fontFamily:'localFont',
+            color: 'white'
+          }}>{unicode('&#xe8c9;')}</Text> : null}
+        </MyButton>
         <MyButton title="fs.reload" onPress={this.reload}/>
         <MyButton title="fs.getContentUri" android={true} onPress={this.getContentUri}/>
         <MyButton title="fs.getShareUri" android={true} onPress={this.getShareUri}/>

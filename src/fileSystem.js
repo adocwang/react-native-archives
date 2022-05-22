@@ -14,7 +14,7 @@ const readSupport = ['text', 'blob', 'base64', 'buffer', 'uri'];
 const drawablExts = ['gif', 'jpg', 'jpeg', 'png', 'svg', 'webp', 'xml', 'bmp', 'psd', 'tiff'];
 
 // ArchivesModuleEvent
-let _Emitter_Req_Id = 186186;
+let _Emitter_Req_Id = 1;
 const _Emitter_Listener_ = {};
 const ArchivesModuleEvent = 'ArchivesModuleEvent';
 const ArchivesEventEmitter = IsAndroid ? DeviceEventEmitter : new NativeEventEmitter(ArchivesModule);
@@ -165,7 +165,7 @@ function getDirPath(dir) {
  *    content://   -  Android File Provider 机制下的文件路径(一般为只读,属于APP的文件可能可写)
  */
 async function getFilePath(file, allowDebug, prefix) {
-  const path = await getString(file, prefix || 'file path');
+  let path = await getString(file, prefix || 'file path');
   // 使用 require() 方式传递的 file path
   if (utils.getNumber(path, null) !== null) {
     const source = Image.resolveAssetSource(path);
@@ -181,7 +181,7 @@ async function getFilePath(file, allowDebug, prefix) {
     path = source.uri;
     const asset = AssetRegistry.getAssetByID(path);
     path = (
-      asset.type && drawablExts.includes(asset.type)
+      asset && asset.type && drawablExts.includes(asset.type)
         ? 'drawable://' : 'raw://'
     ) + path;
   }
@@ -363,7 +363,7 @@ const fs = {
     if (!isUri) {
       return res;
     }
-    const type = await fs.getMime(path);
+    const type = await fs.getMime(file);
     return 'data:'+type+';base64,'+res;
   },
 
