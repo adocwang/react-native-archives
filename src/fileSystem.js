@@ -179,11 +179,15 @@ async function getFilePath(file, allowDebug, prefix) {
       return [source.uri, true];
     }
     path = source.uri;
-    const asset = AssetRegistry.getAssetByID(path);
-    path = (
-      asset && asset.type && drawablExts.includes(asset.type)
-        ? 'drawable://' : 'raw://'
-    ) + path;
+    if (IsAndroid) {
+      const asset = AssetRegistry.getAssetByID(path);
+      path = (
+        asset && asset.type && drawablExts.includes(asset.type)
+          ? 'drawable://' : 'raw://'
+      ) + path;
+    } else if (path.startsWith('file://')){
+      path = path.slice(7);
+    }
   }
   return allowDebug ? [path, false] : path;
 }
