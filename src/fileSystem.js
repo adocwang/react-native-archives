@@ -57,7 +57,7 @@ function ArchivesModuleListener({event, taskId, ...props}) {
   const obj = _Emitter_Listener_[taskId];
   if ('dismiss' === event) {
     delete _Emitter_Listener_[taskId];
-    obj();
+    obj(props);
     return;
   }
   if ('start' === event) {
@@ -116,12 +116,16 @@ function checkOs(method, ios){
   }
 }
 
-function createBlob(options){
-  invariant(BlobManager.isAvailable, 'Native module BlobModule is required for blob support');
-  const blob = BlobManager.createFromOptions(options);
-  const blobPlus = new BlobPlus([blob], options);
-  blob.close();
-  return blobPlus;
+function charHash(s) {
+  for(var i = 0, h = 0; i < s.length; i++) {
+    h = Math.imul(31, h) + s.charCodeAt(i) | 0;
+  }
+  h = h < 0 ? h * -2 : h;
+  return h.toString(16)
+}
+
+function getDirPath(dir) {
+  return getString(dir, 'dir path');
 }
 
 function getString(args, name) {
@@ -145,51 +149,12 @@ function getString(args, name) {
   });
 }
 
-function getDirPath(dir) {
-  return getString(dir, 'dir path');
-}
-
-/**
- * file 路径支持以下格式
- * 
- * 1. 常规文件路径
- *    require()    -  RN 引用 JS 包的资源得到的路径
- * 
- * 2. file sheme 路径
- *    file://      -  绝对路径，可省略协议头, 直接使用 /dir/path (可读写)
- *      
- *    (Android Only)
- *    drawable://  -  Android 原生目录 /main/res/drawable 下的文件(无子文件夹,文件路径不包含文件后缀,只读)
- *    raw://       -  Android 原生目录 /main/res/raw 下的文件(无子文件夹,文件路径不包含文件后缀,只读)
- *    asset://     -  Android 原生目录 /main/assets 下的文件或子文件夹(只读)
- *    content://   -  Android File Provider 机制下的文件路径(一般为只读,属于APP的文件可能可写)
- */
-async function getFilePath(file, allowDebug, prefix) {
-  let path = await getString(file, prefix || 'file path');
-  // 使用 require() 方式传递的 file path
-  if (utils.getNumber(path, null) !== null) {
-    const source = Image.resolveAssetSource(path);
-    if (!source) {
-      throw prefix + ' not find';
-    }
-    if (source.uri.startsWith('http://')) {
-      if (!allowDebug) {
-        throw prefix + ' not support debug mode';
-      }
-      return [source.uri, true];
-    }
-    path = source.uri;
-    if (IsAndroid) {
-      const asset = AssetRegistry.getAssetByID(path);
-      path = (
-        asset && asset.type && drawablExts.includes(asset.type)
-          ? 'drawable://' : 'raw://'
-      ) + path;
-    } else if (path.startsWith('file://')){
-      path = path.slice(7);
-    }
-  }
-  return allowDebug ? [path, false] : path;
+function createBlob(options){
+  invariant(BlobManager.isAvailable, 'Native module BlobModule is required for blob support');
+  const blob = BlobManager.createFromOptions(options);
+  const blobPlus = new BlobPlus([blob], options);
+  blob.close();
+  return blobPlus;
 }
 
 async function fetchFile(url, params) {
@@ -229,17 +194,105 @@ async function fetchFile(url, params) {
   return rs;
 }
 
+/**
+ * file 路径支持以下格式
+ * 
+ * 1. 常规文件路径
+ *    require()    -  RN 引用 JS 包的资源得到的路径
+ * 
+ * 2. file sheme 路径
+ *    file://      -  绝对路径，可省略协议头, 直接使用 /dir/path (可读写)
+ *      
+ *    (Android Only)
+ *    drawable://  -  Android 原生目录 /main/res/drawable 下的文件(无子文件夹,文件路径不包含文件后缀,只读)
+ *    raw://       -  Android 原生目录 /main/res/raw 下的文件(无子文件夹,文件路径不包含文件后缀,只读)
+ *    asset://     -  Android 原生目录 /main/assets 下的文件或子文件夹(只读)
+ *    content://   -  Android File Provider 机制下的文件路径(一般为只读,属于APP的文件可能可写)
+ */
+async function getFilePath(file, prefix, allowLocalUrl) {
+  if (true === prefix) {
+    prefix = null;
+    allowLocalUrl = true;
+  }
+  prefix = prefix || 'file path'
+  // 使用 require() 方式传递的 file path
+  const extra = {};
+  let path = await getString(file, prefix);
+  if (utils.getNumber(path, null) !== null) {
+    const assetId = path;
+    const source = Image.resolveAssetSource(assetId);
+    if (!source) {
+      throw prefix + ' not find';
+    }
+    if (__DEV__) {
+      if (allowLocalUrl) {
+        return [source.uri, true, extra];
+      }
+      let ext = source.uri.split('?')[0];
+      ext = ext.substring(ext.lastIndexOf('.'));
+      const tempFile = ArchivesModule.dirs.Temporary + '/tmp' + charHash(source.uri) + ext;
+      await fetchPlus({
+        url: source.uri,
+        saveTo: tempFile,
+      });
+      return tempFile;
+    }
+    // ios 或 android手动指定 bundleJsFile 的情况下, 此处返回的 file:// 路径
+    path = source.uri;
+    if (path.startsWith('file://')) {
+      if (!IsAndroid){
+        path = path.slice(7);
+      }
+    } else if (IsAndroid) {
+      const asset = AssetRegistry.getAssetByID(assetId);
+      extra.type = asset.type;
+      path = (
+        asset && asset.type && drawablExts.includes(asset.type)
+          ? 'drawable://' : 'raw://'
+      ) + path;
+    }
+  }
+  return allowLocalUrl ? [path, false, extra] : path;
+}
+
 async function copyFile(source, dest, overwrite, move){
-  const path = await getString([
-    [source, 'source path'],
-    [dest, 'dest path']
-  ]);
+  source = (await getFilePath(source, 'source path', true))[0];
+  if (/^https?:\/\//i.test(source)) {
+    if (move) {
+      throw "source path only support file:// scheme, given: " + source;
+    }
+    if (!overwrite && null !== (await ArchivesModule.isDir(dest))) {
+      throw "File already exist: " + dest;
+    }
+    await fetchPlus({url:source, saveTo:dest});
+    return null;
+  }
   const params = {
-    source: path[0],
-    dest: path[1],
+    source,
+    dest: await getString(dest, 'dest path'),
     overwrite: overwrite === false ? false : true
   };
   return move ? ArchivesModule.moveFile(params) : ArchivesModule.copyFile(params);
+}
+
+async function getStuff(stuffs, ext) {
+  const isArr = Array.isArray(stuffs);
+  return new Promise(resolve => {
+    if (isArr && !stuffs.length) {
+      resolve([]);
+      return;
+    }
+    if (!isArr) {
+      if (!stuffs) {
+        resolve(null);
+        return;
+      }
+      stuffs = [stuffs];
+    }
+    ArchivesModule[ext ? 'getExtension' : 'getMimeType'](stuffs).then(r => {
+      resolve(isArr ? r : r[0])
+    })
+  })
 }
 
 async function unzipFile(file, dir, md5, MustSetMd5) {
@@ -271,26 +324,6 @@ function checkMd5(md5, MustSet) {
   return null;
 }
 
-async function getStuff(stuffs, ext) {
-  const isArr = Array.isArray(stuffs);
-  return new Promise(resolve => {
-    if (isArr && !stuffs.length) {
-      resolve([]);
-      return;
-    }
-    if (!isArr) {
-      if (!stuffs) {
-        resolve(null);
-        return;
-      }
-      stuffs = [stuffs];
-    }
-    ArchivesModule[ext ? 'getExtension' : 'getMimeType'](stuffs).then(r => {
-      resolve(isArr ? r : r[0])
-    })
-  })
-}
-
 // filesystem 导出, 以下方法如无特殊说明, async 函数返回 Promise<null>, 执行失败会抛出异常
 const fs = {
   // path  : 支持所有 scheme 路径
@@ -299,20 +332,21 @@ const fs = {
     if (['raw://', 'drawable://'].includes(path)) {
       return Promise.resolve(true);
     }
-    const [file, debug] = await getFilePath(path, true, 'dir path');
+    const [file, debug] = await getFilePath(path, 'dir path', true);
     return debug ? false : ArchivesModule.isDir(file);
   },
 
   // path: 仅支持 file:// 路径 (recursive 默认为 true)
   async mkDir(path, recursive){
-    path = await getDirPath(path);
-    return ArchivesModule.mkDir(path, recursive === false ? false : true);
+    return ArchivesModule.mkDir(
+      await getDirPath(path),
+      recursive === false ? false : true
+    );
   },
 
   // path: 仅支持 file:// 路径 (recursive 默认为 false)
   async rmDir(path, recursive){
-    path = await getDirPath(path);
-    return ArchivesModule.rmDir(path, !!recursive);
+    return ArchivesModule.rmDir(await getDirPath(path), !!recursive);
   },
 
   // path: 支持所有 scheme 路径 (备注: drawable://|raw:// 仅有根目录)
@@ -336,7 +370,7 @@ const fs = {
   // offset  : 设置读取的偏移位置, 若未负数则从文件尾部算起
   async readFile(path, encoding, offset, length){
     const params = {};
-    const [file, debug] = await getFilePath(path, true);
+    const [file, debug, extra] = await getFilePath(path, true);
     encoding = String(encoding||"").toLowerCase();
     encoding = readSupport.includes(encoding) ? encoding : 'text';
     offset = utils.getNumber(offset, null);
@@ -350,7 +384,7 @@ const fs = {
       }
       params.length = length;
     }
-    // debug 模式下 require() 返回 或直接设置的 http url, 直接 fetch 即可
+    // file 为 debug 模式下的 require() 或 http url, 直接 fetch 即可
     if (debug || /^https?:\/\//i.test(file)) {
       params.encoding = encoding;
       return fetchFile(file, params);
@@ -367,7 +401,7 @@ const fs = {
     if (!isUri) {
       return res;
     }
-    const type = await fs.getMime(file);
+    const type = await fs.getMime(extra && extra.type ? 'f.'+extra.type : file);
     return 'data:'+type+';base64,'+res;
   },
 
@@ -406,12 +440,45 @@ const fs = {
    *    <string></string>
    */
   async openFile(file, options) {
-    const {onClose, ...props} = options||{};
-    props.file = await getString(file, 'file path');
-    if (onClose) {
-      props.reqId = getDismissListenerId(onClose);
+    file = await getString(file, 'file path');
+    // iOS
+    if (!IsAndroid) {
+      const {onClose, ...props} = options||{};
+      props.file = file;
+      if (onClose) {
+        props.reqId = getDismissListenerId(onClose);
+      }
+      return ArchivesModule.openFile(props);
     }
-    return ArchivesModule.openFile(props);
+    // Android
+    const scheme = file.match(/^([^\/]+):\/\//);
+    if (Platform.Version >= 24) {
+      if (!scheme || "file" === scheme[1]) {
+        file = await fs.getShareUri(file);
+      }
+    } else if (!scheme) {
+      file = "file://" + file;
+    }
+    let {mime, title, onClose} = options;
+    const params = {
+      onClose,
+      data:file,
+      action:'android.content.Intent$ACTION_VIEW',
+      flag:['FLAG_GRANT_READ_URI_PERMISSION']
+    };
+    if (!mime) {
+      mime = await fs.getMime(file);
+    }
+    if (mime) {
+      params.type = mime;
+    }
+    if (title) {
+      params.extras = [{
+        key:"android.intent.extra.SUBJECT",
+        value:title
+      }]
+    }
+    return await fs.sendIntent(params);
   },
 
   // 从文件路径获取 mimeType, 根据文件后缀判断的, file 可以是 string 或 Array<string>
@@ -425,46 +492,33 @@ const fs = {
   },
 
   // file: 支持所有 scheme 路径, algorithm 可指定算法, 比如 md5(默认), sha256;
-  // 不能在 debug 模式下使用 require() 路径(因为此时返回的是 http 路径)
   async getHash(file, algorithm){
-    const params = {
+    return ArchivesModule.getHash({
       file: await getFilePath(file),
       hash: algorithm||"md5"
-    };
-    return ArchivesModule.getHash(params);
+    });
   },
 
   // 加载字体, file 支持所有 scheme 路径;
   // 1. Android API >=26 才支持 content:// 路径
   // 2. iOS 会忽略 fontName, 会直接使用 ttf 文件内置的字体名
   async loadFont(fontName, file) {
-    let [path, debug] = await getFilePath(file, true, 'font path');
-    // debug 模式下 require() 返回 或直接设置的 http url, 直接 fetch 即可
-    if (debug) {
-      let ext = path.split('?')[0];
-      ext = ext.substr(ext.lastIndexOf('.'));
-      const tempFile = ArchivesModule.dirs.Temporary + '/' + fontName + ext;
-      await fetchPlus({
-        url: path,
-        saveTo: tempFile,
-      });
-      path = tempFile;
-    }
-    return await ArchivesModule.loadFont(fontName, path);
+    return await ArchivesModule.loadFont(fontName, await getFilePath(file, 'font path'));
   },
 
-  // 使用 diff 算法, 合并增量 patch 到 source, 并保存到 dest
-  // 该函数为 diff 工具暴露给 js 的工具函数, 可用于 app 内需要增量更新的文件
-  // source, patch 支持所有 scheme 路径; dest 仅支持有读写权限的路径
-  async mergePatch(source, patch, dest){
-    source = await getFilePath(source, false, 'source path');
-    patch = await getFilePath(patch, false, 'patch path');
-    dest = await getString(dest, 'dest path');
-    return ArchivesModule.mergePatch({
-      origin: source,
-      source: patch,
-      dest
-    })
+  // 重载 js bundle
+  async reload() {
+    if (!__DEV__) {
+      return ArchivesModule.reload();
+    }
+    return new Promise((resolve, reject) => {
+      try {
+        DevSettings.reload();
+        resolve(null)
+      } catch (e) {
+        reject(e);
+      }
+    });
   },
 
   // 解压 zip 文件, file 支持所有 scheme 路径
@@ -473,29 +527,45 @@ const fs = {
     return await unzipFile(file, dir, md5)
   },
 
-  // 热更: 解压全量 bundle 包, file 支持所有 scheme 路径, 必须指定 md5 值以供校验
-  async unzipBundle(file, md5){
-    return unzipFile(file, ArchivesModule.status.downloadRootDir + '/' + md5, md5, true)
+  // 使用 diff 算法, 合并增量 patch 到 source, 并保存到 dest
+  // 该函数为 diff 工具暴露给 js 的工具函数, 可用于 app 内需要增量更新的文件
+  // source, patch 支持所有 scheme 路径; dest 仅支持有读写权限的路径
+  async mergePatch(source, patch, dest){
+    source = await getFilePath(source, 'source path');
+    patch = await getFilePath(patch, 'patch path');
+    dest = await getString(dest, 'dest path');
+    return ArchivesModule.mergePatch({
+      origin: source,
+      source: patch,
+      dest
+    })
   },
-  
-  // 热更: 解压相对于安装包的 patch 增量包, file 支持所有 scheme 路径
-  // 必须指定 md5Version, 可选: 验证 patch 包的 patchMd5
-  async unzipPatch(file, md5Version, patchMd5){
-    const source = await getFilePath(file);
+
+  // 热更: 解压全量 bundle 包, bundle 支持所有 scheme 路径, 必须指定新版本 md5 以供校验
+  async unzipBundle(bundle, md5){
+    return unzipFile(bundle, ArchivesModule.status.downloadRootDir + '/' + md5, md5, true)
+  },
+
+  // 热更: 解压相对于安装包的 patch 增量包, patch 支持所有 scheme 路径
+  // md5Version(必选): 新热更版本的版本号, 通常为新版本 bundle 的 md5 值
+  // patchMd5(可选): 指定 patch 文件的 md5 hash 值, 用于校验
+  async unzipPatch(patch, md5Version, patchMd5){
+    const source = await getFilePath(patch);
     const version = checkMd5(md5Version, true);
     const params = {source, dest: ArchivesModule.status.downloadRootDir + '/' + version};
     bindMd5(params, patchMd5);
     return ArchivesModule.unzipPatch(params);
-  },  
-  
-  // 热更: 解压相对于 originVersion 的 patch 增量包, file 支持所有 scheme 路径
-  // 必须指定 md5Version, originVersion; 可选: 指定验证 patch 包的 patchMd5
-  async unzipDiff(file, md5Version, originVersion, patchMd5){
-    const source = await getFilePath(file);
+  },
+
+  // 热更: 解压相对于当前版本的 patch 增量包, patch 支持所有 scheme 路径
+  // md5Version(必选): 新热更版本的版本号, 通常为新版本 bundle 的 md5 值
+  // patchMd5(可选): 指定 patch 文件的 md5 hash 值, 用于校验
+  async unzipDiff(patch, md5Version, patchMd5){
+    const source = await getFilePath(patch);
     const version = checkMd5(md5Version, true);
-    const origin = checkMd5(originVersion, true);
+    const origin = ArchivesModule.status.currentVersion;
     const params = {
-      source, 
+      source,
       origin,
       dest: ArchivesModule.status.downloadRootDir + '/' + version
     };
@@ -516,32 +586,43 @@ const fs = {
     return ArchivesModule.markSuccess()
   },
 
-  // 重载 js bundle
-  async reload() {
-    return new Promise((resolve, reject) => {
-      try {
-        DevSettings.reload();
-        resolve(null)
-      } catch (e) {
-        reject(e);
-      }
-    });
+  // 热更: 清除热更补丁, 恢复到冷版本(reload:true 立即重载生效,否则下次启动时生效)
+  async reinitialize(reload) {
+    return ArchivesModule.reinitialize(Boolean(reload));
   },
 
   // [iOS Only] 保存文件到相册, file支持 file://, http://, data://base64; 
-  // options:{type, album} 通过 album 设置相册名称; type='photo|video' 指明文件是图片还是视频
+  // options:{type, album} type='photo|video|auto' 指明文件是图片还是视频; album 设置相册名称
   async saveToCameraRoll(file, options){
     checkOs('saveToCameraRoll', true);
     return await ArchivesModule.saveToCameraRoll(file, options)
   },
 
-  // [Android Only] 将制定的 file:// 路径文件添加到相册
+  // [Android Only] 将指定的 file:// 路径文件添加到系统相册
   async scanFile(file){
     checkOs('scanFile');
     return await ArchivesModule.scanFile(file)
   },
 
-  // [Android Only] 获取 APP 私有文件的 content:// 路径, 可共享给其他 APP 读取, 
+  // [Android Only] Android 11.0+ 判断是否有 MANAGE_EXTERNAL_STORAGE 的权限
+  async isExternalManager(){
+    checkOs('isExternalManager');
+    return await ArchivesModule.isExternalManager()
+  },
+
+  // [Android Only] Android 11.0+ 请求用户授权 MANAGE_EXTERNAL_STORAGE 的权限
+  async requestExternalManager(){
+    checkOs('requestExternalManager');
+    return new Promise((resolve, reject) => {
+      fs.sendIntent({
+        action:'android.provider.Settings$ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION',
+        data:"package:" + ArchivesModule.status.packageName,
+        onClose:resolve
+      }).catch(reject);
+    });
+  },
+
+  // [Android Only] 获取 APP 私有文件的 content:// 路径, 可共享给其他 APP 读取,
   // 比如 openFile 函数, 就是利用该特性; 这里暴露一个方法, 比如可以用在分享图片到微信
   async getShareUri(file){
     checkOs('getShareUri');
@@ -568,6 +649,35 @@ const fs = {
       mediaType = "Files"
     }
     return await ArchivesModule.getContentUri(mediaType, type||"external")
+  },
+
+  /**
+   * [Android Only] 打开一个意图页, 可参考通用意图: https://developer.android.com/guide/components/intents-common
+   * options: {
+   *   *action: '',  可直接设置,如 'android.intent.action.VIEW', 也可指定为 'Class$property' 如 'android.content.Intent$ACTION_VIEW'
+   *   data: '',  要传递的数据
+   *   type: '',  数据的 mimeType
+   *   categories: ['',..], 类别,可设置多个,单个值的设置方式与 action 相同
+   *   package:'',  设置明确的应用程序包名称
+   *   component:'package/class', 设置显式意图, 如分享到微信 'com.tencent.mm/com.tencent.mm.ui.tools.ShareImgUI',
+   *   identifier:'', 标识符, Android10.0+ 之后生效
+   *   extras:[                                    要传递的额外数据
+   *      {key:'', value:String|Number|Bool},      值可以是字符串|数字|布尔值
+   *      {key:'', value:'', type:'uri'},          值是字符串时, 可通过 type 指明这是一个uri
+   *      {key:'', value:[], type:'string|int|uri'}值可以是数组, 通过 type 指明数组单项值的类型, 缺省为 string
+   *   ],
+   *   flag:['FLAG_ACTIVITY_NEW_TASK', ''],  打开方式, 支持的 FLAG 可参考
+   *   https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/content/Intent.java#6601
+   *   onClose:Function(),  从意图打开页返回到APP时的回调
+   * }
+   */
+  async sendIntent(options){
+    checkOs('sendIntent');
+    const {onClose, ...props} = options||{};
+    if (onClose) {
+      props.reqId = getDismissListenerId(onClose);
+    }
+    return await ArchivesModule.sendIntent(props)
   },
 
  /**

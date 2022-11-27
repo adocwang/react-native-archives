@@ -4,6 +4,8 @@ import {NativeModules} from 'react-native';
 import {readBlob, parseHeader, arrayBufferToText} from './utils';
 
 const {ArchivesModule} = NativeModules;
+
+// RequestPlus 在 Request 基础上的新增属性
 const fetchListener = ['onHeader', 'onUpload', 'onDownload'];
 const fetchExtend = fetchListener.concat(['timeout', 'saveTo', 'keepBlob', 'resText']);
 
@@ -20,7 +22,7 @@ function isPlainObject(value) {
     && Function.prototype.toString.call(Ctor) === Function.prototype.toString.call(Object);
 }
 
-// 读取 Request/Response 为 blob
+// 读取 Request/Response 为 BlobPlus
 function getBlob() {
   if (this.bodyUsed) {
     return Promise.reject(new TypeError('Already read'))
@@ -47,7 +49,21 @@ function getBlob() {
   return Promise.resolve(new BlobPlus([this._bodyText], {type: type||'text/plain'}))
 }
 
-// BlobPlus: 继承并完善扩展 Blob
+const isPlainData = (data) => {
+  return PlainData.prototype.isPrototypeOf(data);
+}
+
+class PlainData {
+  constructor(data) {
+    this.data = data;
+  }
+  toString(){
+    return JSON.stringify(this.data);
+  }
+}
+
+// BlobPlus: 继承并扩展 Blob, 提供 text/arrayBuffer/base64/dataUrl 方法
+// RN Blob 源码: https://github.com/facebook/react-native/blob/main/Libraries/Blob/Blob.js
 class BlobPlus extends Blob {
   slice(start, end, contentType){
     const slice = super.slice(start, end);
@@ -69,19 +85,8 @@ class BlobPlus extends Blob {
   }
 }
 
-class PlainData {
-  constructor(data) {
-    this.data = data;
-  }
-  toString(){
-    return JSON.stringify(this.data);
-  }
-}
-const isPlainData = (data) => {
-  return PlainData.prototype.isPrototypeOf(data);
-}
-
-// RequestPlus: 继承并完善扩展 Request
+// RequestPlus: 继承并扩展 Request
+// RN 使用 whatwg-fetch: https://github.com/facebook/react-native/blob/main/Libraries/Network/fetch.js
 class RequestPlus extends Request {
   constructor(input, options) {
     input = input||'';
@@ -166,7 +171,7 @@ class RequestPlus extends Request {
       }
     })
   }
-  // 修复 blob arrayBuffer 方法, 以 BlobPlus 替代 Blob
+  // 修复 blob/arrayBuffer 方法, 以 BlobPlus 替代 Blob
   blob() {
     return getBlob.call(this);
   }
@@ -180,7 +185,7 @@ class RequestPlus extends Request {
   }
 }
 
-// ResponsePlus: 继承并完善扩展 Response
+// ResponsePlus: 继承并扩展 Response
 class ResponsePlus extends Response {
   // 与 RequestPlus 类似, 让 bodyInit 支持 DataView/Object|Array(转为 PlainData 缓存) 类型
   constructor(bodyInit, options) {
@@ -203,7 +208,7 @@ class ResponsePlus extends Response {
       }
     }
   }
-  // 修复 blob arrayBuffer 方法, 以 BlobPlus 替代 Blob
+  // 修复 blob/arrayBuffer 方法, 以 BlobPlus 替代 Blob
   blob() {
     return getBlob.call(this);
   }
@@ -262,7 +267,7 @@ function fetchPlus(input, init) {
     const request = new RequestPlus(input, init);
 
     // RN 支持的 responseType 有 blob,text; 若设置了 saveTo, 会自动设置 responseType 为 blob.
-    // 但对于请求下载文件的场景, 一般是不关心文件 blob 数据的, 所以保存完文件后, 会自动 close blob.
+    // 但对于下载文件的场景, 一般是不关心文件 blob 数据的, 所以保存完文件后, 会自动 close blob.
     // 若在该场景下, 后续仍需要读取 blob 数据, 可需通过 keepBlob:true 强制保留 blob 对象
     let saveTo, keepBlob;
     if (request.saveTo) {
@@ -273,7 +278,7 @@ function fetchPlus(input, init) {
       }
       keepBlob = Boolean(request.keepBlob)
     }
-    
+
     const signal = request.signal;
     if (signal && signal.aborted) {
       return reject(new DOMException('Aborted', 'AbortError'))

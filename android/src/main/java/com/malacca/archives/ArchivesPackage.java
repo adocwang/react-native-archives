@@ -19,6 +19,7 @@ public class ArchivesPackage implements ReactPackage {
 
     @NonNull
     @Override
+    @SuppressWarnings("rawtypes")
     public List<ViewManager> createViewManagers(@NonNull ReactApplicationContext reactContext) {
         return Collections.emptyList();
     }

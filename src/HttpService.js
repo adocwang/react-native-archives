@@ -42,12 +42,15 @@ class MockRes {
     }
   }
 }
+
 function isHttpUrl(url) {
   return /^(http:\/\/|https:\/\/|\/\/)/i.test(url)
 }
+
 function removeUrlSalash(url) {
   return '/' + url.replace(/([^:]\/)\/+/g, "$1").replace(/^\//g, '');
 }
+
 function parseMock(mock) {
   const data = {};
   Object.entries(mock||{}).forEach(([key, value]) => {
@@ -67,6 +70,7 @@ function parseMock(mock) {
   });
   return Object.keys(data).length ? data : null;
 }
+
 function fetchRequest(input, httpReq) {
   const service = httpReq.service;
   const data = service.mockData;

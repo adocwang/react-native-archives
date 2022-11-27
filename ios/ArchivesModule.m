@@ -428,7 +428,7 @@ RCT_EXPORT_METHOD(readFile:(NSDictionary *)options
     NSNumber *length = [options objectForKey:@"length"];
     NSNumber *position = [options objectForKey:@"position"];
     NSFileManager *manager = [NSFileManager defaultManager];
-    
+
     // 文件校验
     if (![manager fileExistsAtPath:file isDirectory:false]) {
         return reject(RCTErrorUnspecified, [NSString stringWithFormat:@"file not exist: %@", file], nil);
@@ -579,7 +579,7 @@ RCT_EXPORT_METHOD(loadFont:(NSString *)familyName
         但对于某些使用场景有问题, 比如 file1, file2 字体文件的 fontName 相同 -> 先注册 file1 -> 再注册 file2;
         此时先注销 file2 会失败, 因为 file2 并未注册; 若直接注册 file2 也会失败, 因为 fontName 已被 file1 占用;
         那么注册 file2 时, 就需要带着 file1 作为参数以便先注销, 释放 fontName 占用, 太麻烦了, 所以改用 GraphicsFont 注册/注销.
-     
+
      2. 参考以下两个链接, 使用 [UIFont fontWithName] 方式创建字体, 会自动缓存 fontWithName 字体到内存中, 以便下次 UIFont 使用,
         若此时重新设置 fontWithName 的字体文件, 再次使用 [UIFont fontWithName] 仍然会从内存中读取, 使用上次设置的字体文件:
         https://developer.apple.com/forums/thread/82660 | https://stackoverflow.com/q/17550556
@@ -595,7 +595,7 @@ RCT_EXPORT_METHOD(loadFont:(NSString *)familyName
         //不知道这个 bug 还在不在, 暂且留着吧
         //https://stackoverflow.com/questions/24900979/cgfontcreatewithdataprovider-hangs-in-airplane-mode
         [UIFont familyNames];
-        
+
         // 从 fontPath 获取 fontRef
         CGFontRef fontRef;
         NSData *inData = [NSData dataWithContentsOfFile:fontPath];
@@ -607,7 +607,7 @@ RCT_EXPORT_METHOD(loadFont:(NSString *)familyName
         if (!fontRef) {
             return reject(RCTErrorUnspecified, @"load font file failed", nil);
         }
-        
+
         // 若已注册, 先注销原注册
         NSString *fontName;
         CGFontRef originFont;
@@ -640,7 +640,7 @@ RCT_EXPORT_METHOD(loadFont:(NSString *)familyName
                 CFRelease(originFont);
             }
         }
-        
+
         // 注册新 fontRef
         CFErrorRef error;
         if (!CTFontManagerRegisterGraphicsFont(fontRef, &error)) {

@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.lang.reflect.Field;
@@ -32,45 +33,46 @@ import android.text.TextUtils;
 import android.database.Cursor;
 import android.graphics.Typeface;
 import android.webkit.MimeTypeMap;
-import androidx.annotation.NonNull;
 import android.media.MediaScannerConnection;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.core.content.res.ResourcesCompat;
 
+import com.facebook.react.ReactNativeHost;
 import com.facebook.react.ReactApplication;
 import com.facebook.react.ReactInstanceManager;
+import com.facebook.react.views.text.ReactFontManager;
+import com.facebook.react.bridge.JSBundleLoader;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.ReadableType;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.UiThreadUtil;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.ReadableArray;
-import com.facebook.react.bridge.JSBundleLoader;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReadableMapKeySetIterator;
 import com.facebook.react.bridge.BaseActivityEventListener;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
-import com.facebook.react.views.text.ReactFontManager;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 public class ArchivesModule extends ReactContextBaseJavaModule {
-    /**
-     * 热更 js bundle 接口
-     */
-    public static boolean getBundleDev(Context context) {
-        return ArchivesContext.getBundleDev(context.getApplicationContext());
+
+    // js bundle file 接口
+    public static boolean useJSBundleFile(Context context) {
+        return ArchivesContext.useBundleFile(context.getApplicationContext());
     }
 
-    public static String getBundleUrl(Context context, String defaultAssetsUrl) {
-        return ArchivesContext.getBundleUrl(context.getApplicationContext(), defaultAssetsUrl);
+    public static String getJSBundleFile(Context context, String fallbackBundle) {
+        return ArchivesContext.getBundleFile(context.getApplicationContext(), fallbackBundle);
     }
 
-    /**
-     * 文件管理 相关
-     */
+    // 文件管理
     private final Executor executor;
     private BroadcastReceiver broadcastReceiver;
+    private Map<String, Object> versionConstants;
     private final ReactApplicationContext rnContext;
     private final String REACT_CLASS = "ArchivesModule";
     private DeviceEventManagerModule.RCTDeviceEventEmitter mJSModule;
@@ -80,12 +82,28 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         super(context);
         rnContext = context;
         executor = Executors.newSingleThreadExecutor();
+        versionConstants = ArchivesContext.getConstants(rnContext);
         rnContext.addActivityEventListener(new BaseActivityEventListener() {
             @Override
-            public void onActivityResult(final Activity activity, final int requestCode, final int resultCode, final Intent intent) {
+            public void onActivityResult(final Activity activity, final int requestCode, final int resultCode, @Nullable final Intent intent) {
+                // 接收 sendIntent 的返回消息
                 WritableMap params = Arguments.createMap();
                 params.putString("event", "dismiss");
                 params.putInt("taskId", requestCode);
+                params.putInt("code", resultCode);
+                try {
+                    Bundle extras = null == intent ? null : intent.getExtras();
+                    if (null == extras) {
+                        params.putNull("data");
+                    } else {
+                        params.putMap("data", Arguments.fromBundle(extras));
+                    }
+                } catch (Throwable e) {
+                    params.putNull("data");
+                    if (BuildConfig.DEBUG) {
+                        e.printStackTrace();
+                    }
+                }
                 sendEvent(params);
             }
         });
@@ -100,14 +118,21 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
     public Map<String, Object> getConstants() {
         final Map<String, Object> constants = new HashMap<>();
 
-        // 热更相关常量
-        constants.put("status", ArchivesContext.getConstants(rnContext));
+        // 传递热更相关常量给 JS, 此处释放, 不能在这里通过 ArchivesContext.getConstants 获取
+        // 因为 JS 发生异常有可能导致 Java 无法执行到此处, 那么会导致自动回滚失效
+        if (null == versionConstants) {
+            constants.put("status", ArchivesContext.getConstants(rnContext));
+        } else {
+            constants.put("status", versionConstants);
+            versionConstants = null;
+        }
 
         // 内部存储路径
         String fileDir = rnContext.getFilesDir().getAbsolutePath();
         String cacheDir = rnContext.getCacheDir().getAbsolutePath();
         final Map<String, Object> dirs = new HashMap<>();
         dirs.put("MainBundle", rnContext.getPackageResourcePath());
+        dirs.put("Root", rnContext.getApplicationInfo().dataDir);
         dirs.put("Document", fileDir);
         dirs.put("Library", fileDir);
         dirs.put("Caches", cacheDir);
@@ -116,11 +141,11 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
 
         // 外部存储路径
         final Map<String, String> storage = new HashMap<>();
-        File externalDirectory = rnContext.getExternalFilesDir(null);
-        storage.put("AppDocument", externalDirectory == null ? null : externalDirectory.getAbsolutePath());
-
-        File externalCachesDirectory = rnContext.getExternalCacheDir();
-        storage.put("AppCaches", externalCachesDirectory == null ? null : externalCachesDirectory.getAbsolutePath());
+        File externalFilesDir = rnContext.getExternalFilesDir(null);
+        File externalCachesDir = rnContext.getExternalCacheDir();
+        storage.put("AppRoot", externalFilesDir == null ? null : externalFilesDir.getParent());
+        storage.put("AppDocument", externalFilesDir == null ? null : externalFilesDir.getAbsolutePath());
+        storage.put("AppCaches", externalCachesDir == null ? null : externalCachesDir.getAbsolutePath());
 
         storage.put("Root", Environment.getExternalStorageDirectory().getAbsolutePath());
         storage.put("Music", Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).getAbsolutePath());
@@ -186,7 +211,29 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
     }
 
     /**
-     * todo: 一次性返回所有可用 content_uri
+     * 获取文件 hash 值, file 支持的路径
+     * 1. ContentResolver 类型
+     *    ContentResolver.SCHEME_FILE [file://]/data/xx  (file scheme 可省略)
+     *    ContentResolver.SCHEME_CONTENT  content://xxx
+     *    ContentResolver.SCHEME_ANDROID_RESOURCE  android.resource://xxx
+     * 2. 静态资源类型 (assets || drawable raw)
+     *    asset://xx
+     *    drawable://xxx   raw://xxx
+     */
+    @ReactMethod
+    public void getHash(ReadableMap options, final Promise promise){
+        String filepath = options.hasKey("file") ? options.getString("file") : null;
+        if (filepath == null) {
+            promise.reject("E_MISSING", "missing file argument");
+            return;
+        }
+        ArchivesParams params = makeArchivesParams(promise);
+        params.filepath = filepath;
+        params.md5 = options.hasKey("hash") ? options.getString("hash") : null;
+        runManagerTask(params, ArchivesParams.TASK.GET_HASH);
+    }
+
+    /**
      * 获取 MediaStore 的 content:// uri
      * mediaType 可以是
      *    Images$Media  / Video$Media  / Audio$Media  / Files / Downloads
@@ -211,29 +258,6 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         }
     }
 
-    /**
-     * 获取文件 hash 值, file 支持的路径
-     * 1. ContentResolver 类型
-     *    ContentResolver.SCHEME_FILE [file://]/data/xx  (file scheme 可省略)
-     *    ContentResolver.SCHEME_CONTENT  content://xxx
-     *    ContentResolver.SCHEME_ANDROID_RESOURCE  android.resource://xxx
-     * 2. 静态资源类型 (assets || drawable raw)
-     *    asset://xx
-     *    drawable://xxx   raw://xxx
-     */
-    @ReactMethod
-    public void getHash(ReadableMap options, final Promise promise){
-        String filepath = options.hasKey("file") ? options.getString("file") : null;
-        if (filepath == null) {
-            promise.reject("E_MISSING", "missing file argument");
-            return;
-        }
-        ArchivesParams params = makeArchivesParams(promise);
-        params.filepath = filepath;
-        params.md5 = options.hasKey("hash") ? options.getString("hash") : null;
-        runManagerTask(params, ArchivesParams.TASK.GET_HASH);
-    }
-
     // 获取当前 App 私有文件的 content:// 路径, 可共享给其他 APP
     @ReactMethod
     public void getShareUri(String path, final Promise promise) {
@@ -241,10 +265,7 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
             Uri uri = getProviderUri(Uri.parse(path).getPath());
             promise.resolve(uri.toString());
         } catch (Throwable e) {
-            promise.reject(e);
-            if (BuildConfig.DEBUG) {
-                e.printStackTrace();
-            }
+            rejectThrowable(promise, e);
         }
     }
 
@@ -257,8 +278,20 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         );
     }
 
-    // 支持路径与 getHash 相同, 其中 file:// asset:// 支持文件夹判断
-    // 返回: true(文件夹) false(文件) null(不存在)
+    // Android 11.0+ 是否有 MANAGE_EXTERNAL_STORAGE 的权限
+    @ReactMethod
+    public void isExternalManager(final Promise promise){
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            promise.resolve(Environment.isExternalStorageManager());
+        } else {
+            promise.resolve(null);
+        }
+    }
+
+    /**
+     * 支持路径与 getHash 相同, 其中 file:// asset:// 支持文件夹判断
+     * 返回: true(文件夹) false(文件) null(不存在)
+     */
     @ReactMethod
     public void isDir(String path, final Promise promise){
         ArchivesParams params = makeArchivesParams(promise);
@@ -276,28 +309,27 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
             File file = new File(path);
             if (file.exists()) {
                 if (!file.isDirectory()) {
-                    throw new Exception("Path already exist and is not dir: " + path);
+                    throw new IOException("Path already exist and is not dir: " + path);
                 }
                 promise.resolve(null);
                 return;
             }
             if (!(recursive ? file.mkdirs() : file.mkdir())) {
-                throw new Exception("Created dir failed: " + path);
+                throw new IOException("Created dir failed: " + path);
             }
             promise.resolve(null);
         } catch (Throwable e) {
-            promise.reject(e);
-            if (BuildConfig.DEBUG) {
-                e.printStackTrace();
-            }
+            rejectThrowable(promise, e);
         }
     }
 
-    // 支持路径
-    // 1. [file://]/path 文件夹路径
-    // 2. asset://path  资源目录
-    // 3. content://path 类型返回的数据结构与前二者不同, 会返回内容提供者所有 row 数据
-    // 4. drawable:// | raw:// 返回所有 resource 资源
+    /**
+     * 读取文件夹列表, 支持路径
+     * 1. [file://]/path 文件夹路径
+     * 2. asset://path  资源目录
+     * 3. content://path 类型返回的数据结构与前二者不同, 会返回内容提供者所有 row 数据
+     * 4. drawable:// | raw:// 返回所有 resource 资源
+     */
     @ReactMethod
     public void readDir(String dir, final Promise promise){
         ArchivesParams params = makeArchivesParams(promise);
@@ -347,10 +379,12 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         runManagerTask(params, ArchivesParams.TASK.SAVE_FILE);
     }
 
-    // 支持路径与 getHash 相同
-    // 1. 通过 encoding 设置返回的数据类型  string|blob|base64
-    // 2. 可通过 position 指定读取开始的位置, 可以为负数, 从文件末尾开始算起, 默认为 0, 即从开头读取
-    // 3. 可通过 length 设定读取长度, 不指定则读取到结束为止
+    /**
+     * 读取文件, 支持路径与 getHash 相同
+     * 1. 通过 encoding 设置返回的数据类型  string|blob|base64
+     * 2. 可通过 position 指定读取开始的位置, 可以为负数, 从文件末尾开始算起, 默认为 0, 即从开头读取
+     * 3. 可通过 length 设定读取长度, 不指定则读取到结束为止
+     */
     @ReactMethod
     public void readFile(ReadableMap options, final Promise promise){
         String filepath = options.hasKey("file") ? options.getString("file") : null;
@@ -409,21 +443,13 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         if ((path = getFilePath(path, promise, "file path")) == null) {
             return;
         }
-        MediaScannerConnection.scanFile(
-                rnContext,
-                new String[]{path},
-                null,
-                new MediaScannerConnection.OnScanCompletedListener() {
-                    @Override
-                    public void onScanCompleted(String path, Uri uri) {
-                        if (uri != null) {
-                            promise.resolve(uri.toString());
-                        } else {
-                            promise.reject("E_UNABLE_TO_SAVE", "Could not add image to gallery");
-                        }
-                    }
-                }
-        );
+        MediaScannerConnection.scanFile(rnContext, new String[]{path},null, (file, uri) -> {
+            if (uri != null) {
+                promise.resolve(uri.toString());
+            } else {
+                promise.reject("E_SCAN_FAILED", "Could not add image to gallery");
+            }
+        });
     }
 
     private String getFilePath(String path, Promise promise, String msg) {
@@ -432,7 +458,7 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         if (ContentResolver.SCHEME_FILE.equals(scheme)) {
             return uri.getPath();
         } else if (scheme != null) {
-            promise.reject("E_MISSING", msg + " only support file:// scheme, given: " + path);
+            promise.reject("E_ILLEGAL", msg + " only support file:// scheme, given: " + path);
             return null;
         }
         return path;
@@ -443,17 +469,14 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         try {
             File file = new File(path);
             if (!file.exists() || !file.isFile()) {
-                throw new Exception("File does not exist: " + path);
+                throw new IOException("File does not exist: " + path);
             }
             if (!file.delete()) {
-                throw new Exception("Unlink file failed: " + path);
+                throw new IOException("Unlink file failed: " + path);
             }
             promise.resolve(null);
         } catch (Throwable e) {
-            promise.reject(e);
-            if (BuildConfig.DEBUG) {
-                e.printStackTrace();
-            }
+            rejectThrowable(promise, e);
         }
     }
 
@@ -519,21 +542,38 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         try {
             ArchivesContext.switchVersion(options.hasKey("hash") ? options.getString("hash") : null);
             if (options.hasKey("reload") && options.getBoolean("reload")) {
-                reload(promise);
+                reload(promise, true);
             } else {
                 promise.resolve(null);
             }
         } catch (Throwable e) {
-            promise.reject(e);
-            if (BuildConfig.DEBUG) {
-                e.printStackTrace();
-            }
+            rejectThrowable(promise, e);
         }
     }
 
     @ReactMethod
-    public void markSuccess(){
-        ArchivesContext.markSuccess();
+    public void markSuccess(final Promise promise){
+        try {
+            ArchivesContext.markSuccess();
+            promise.resolve(null);
+        } catch (Throwable e) {
+            rejectThrowable(promise, e);
+        }
+    }
+
+    @ReactMethod
+    public void reinitialize(boolean reload, final Promise promise){
+        try {
+            ArchivesContext.reinitialize();
+            if (reload) {
+                reload(promise, true);
+            } else {
+                promise.resolve(null);
+            }
+            promise.resolve(null);
+        } catch (Throwable e) {
+            rejectThrowable(promise, e);
+        }
     }
 
     private void runManagerTask(ArchivesParams params, ArchivesParams.TASK task) {
@@ -553,10 +593,7 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
 
             @Override
             void onFailed(Throwable e) {
-                promise.reject(e);
-                if (BuildConfig.DEBUG) {
-                    e.printStackTrace();
-                }
+                rejectThrowable(promise, e);
             }
 
             @Override
@@ -586,7 +623,73 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         };
     }
 
-    // 重启 app
+    @ReactMethod
+    public void reload(final Promise promise) {
+        reload(promise, false);
+    }
+
+    private void reload(final Promise promise, boolean reset) {
+        UiThreadUtil.runOnUiThread(() -> {
+            try {
+                Activity activity = getCurrentActivity();
+                if (activity == null) {
+                    throw new Exception("get current activity failed");
+                }
+                boolean hotReload = true;
+                Application application = activity.getApplication();
+                ReactNativeHost Host = ((ReactApplication) application).getReactNativeHost();
+                ReactInstanceManager instanceManager = Host.getReactInstanceManager();
+                if (reset) {
+                    try {
+                        // ReactInstanceManager 没有提供设置方法, 所以只能通过反射来处理
+                        // 但不兼容 RN 0.50.0 之前的版本, 因为没有 mBundleLoader 这个变量
+                        Class<?> managerClass = instanceManager.getClass();
+                        String bundleUrl = ArchivesContext.getBundleFile(application, null);
+                        Field bundleLoader = managerClass.getDeclaredField("mBundleLoader");
+                        bundleLoader.setAccessible(true);
+                        if (null == bundleUrl) {
+                            String assertName = ArchivesManager.getBundleAssetName(Host);
+                            bundleLoader.set(instanceManager, JSBundleLoader.createAssetLoader(
+                                application, "assets://" + assertName, false
+                            ));
+                        } else {
+                            bundleLoader.set(instanceManager, JSBundleLoader.createFileLoader(bundleUrl));
+                        }
+                        // 支持 Debug 模式下的版本切换
+                        if (BuildConfig.DEBUG) {
+                            if (null == bundleUrl) {
+                                // 从热更版 -> Debug, 牵涉的变量无法简单通过反射重置, 所以重启 App
+                                hotReload = false;
+                            } else {
+                                // 从 Debug -> 热更版本, 还需修改 mUseDeveloperSupport 变量
+                                Field devField = managerClass.getDeclaredField("mUseDeveloperSupport");
+                                devField.setAccessible(true);
+                                if (devField.getBoolean(instanceManager)) {
+                                    devField.set(instanceManager, false);
+                                }
+                            }
+                        }
+                    } catch (Throwable e) {
+                        // runtime 重置 bundle 失败, 直接重启 APP
+                        hotReload = false;
+                    }
+                }
+                if (hotReload) {
+                    try {
+                        instanceManager.recreateReactContextInBackground();
+                    } catch(Throwable err) {
+                        activity.recreate();
+                    }
+                    promise.resolve(null);
+                } else {
+                    restart(promise);
+                }
+            } catch (Throwable e) {
+                rejectThrowable(promise, e);
+            }
+        });
+    }
+
     @ReactMethod
     private void restart(final Promise promise) {
         new Handler().postDelayed(() -> {
@@ -594,63 +697,16 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
                 PackageManager packageManager = rnContext.getPackageManager();
                 Intent intent = packageManager.getLaunchIntentForPackage(rnContext.getPackageName());
                 if (intent == null) {
-                    throw new RuntimeException("get current intent failed");
+                    throw new Exception("get current intent failed");
                 }
                 ComponentName componentName = intent.getComponent();
                 Intent mainIntent = Intent.makeRestartActivityTask(componentName);
                 rnContext.startActivity(mainIntent);
                 Runtime.getRuntime().exit(0);
             } catch (Throwable e) {
-                promise.reject(e);
-                if (BuildConfig.DEBUG) {
-                    e.printStackTrace();
-                }
+                rejectThrowable(promise, e);
             }
-        }, 300);
-    }
-
-    @ReactMethod
-    public void reload(final Promise promise) {
-        if (BuildConfig.DEBUG) {
-            restart(promise);
-        } else {
-            restartActive(promise);
-        }
-    }
-
-    // release 模式重载 bundle 即可
-    private void restartActive(final Promise promise) {
-        UiThreadUtil.runOnUiThread(() -> {
-            try {
-                Activity activity = getCurrentActivity();
-                if (activity == null) {
-                    throw new RuntimeException("get current activity failed");
-                }
-                Application application = activity.getApplication();
-                ReactInstanceManager instanceManager = ((ReactApplication) application)
-                        .getReactNativeHost()
-                        .getReactInstanceManager();
-                String bundleUrl = ArchivesContext.getBundleUrl(application, null);
-                try {
-                    Field jsBundleField = instanceManager.getClass().getDeclaredField("mJSBundleFile");
-                    jsBundleField.setAccessible(true);
-                    jsBundleField.set(instanceManager, bundleUrl);
-                } catch (Throwable err) {
-                    JSBundleLoader loader = JSBundleLoader.createFileLoader(bundleUrl);
-                    Field loadField = instanceManager.getClass().getDeclaredField("mBundleLoader");
-                    loadField.setAccessible(true);
-                    loadField.set(instanceManager, loader);
-                }
-                try {
-                    instanceManager.recreateReactContextInBackground();
-                } catch(Throwable err) {
-                    activity.recreate();
-                }
-                promise.resolve(null);
-            } catch (Throwable e) {
-                promise.reject(e);
-            }
-        });
+        }, 250);
     }
 
     // 添加一个 使用系统下载器的 下载任务
@@ -723,18 +779,11 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
                 downloader.remove(downloadId);
                 downloaderTask.remove(downloadId);
             }
-            promise.reject(e);
-            if (BuildConfig.DEBUG) {
-                e.printStackTrace();
-            }
+            rejectThrowable(promise, e);
         }
     }
 
-    private void checkDownloadProgress(
-            final long downloadId,
-            final String taskId,
-            final boolean emit
-    ) {
+    private void checkDownloadProgress(final long downloadId, final String taskId, final boolean emit) {
         (new Thread() {
             @Override
             public void run() {
@@ -754,13 +803,13 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
                         }
                         cursor = dm.query(new DownloadManager.Query().setFilterById(downloadId));
                         if (cursor == null || !cursor.moveToFirst()) {
-                            throw new RuntimeException("Query download id failed");
+                            throw new Exception("Query download id failed");
                         }
                         // 超过 1500ms 仍处于 PENDING 状态, 直接返回失败
-                        int status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
+                        int status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
                         if(status == DownloadManager.STATUS_PENDING) {
                             if (System.currentTimeMillis() - startTimestamp > 1500L) {
-                                throw new RuntimeException("Download timeout");
+                                throw new Exception("Download timeout");
                             }
                             continue;
                         }
@@ -779,8 +828,8 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
                         if (!emit || status != DownloadManager.STATUS_RUNNING) {
                             break;
                         }
-                        double total = cursor.getDouble(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
-                        double loaded = cursor.getDouble(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                        double total = cursor.getDouble(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                        double loaded = cursor.getDouble(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
                         double percent = 100 * loaded / total;
                         // 下载进度每达成 1% 通知一次
                         if (percent - startPercent > 1) {
@@ -845,22 +894,22 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
                     DownloadManager dm = (DownloadManager) rnContext.getSystemService(Context.DOWNLOAD_SERVICE);
                     cursor = dm.query(new DownloadManager.Query().setFilterById(downloadId));
                     if (cursor == null || !cursor.moveToFirst()) {
-                        throw new RuntimeException("Query download id failed");
+                        throw new Exception("Query download id failed");
                     }
-                    int status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
+                    int status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
                     if(status != DownloadManager.STATUS_SUCCESSFUL) {
-                        throw new RuntimeException("Download failed status " + status);
+                        throw new Exception("Download failed status " + status);
                     }
-                    String filePath = cursor.getString(cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI));
+                    String filePath = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI));
                     if (!ArchivesManager.fileExist(rnContext, filePath)) {
-                        throw new RuntimeException("Download file " + filePath + " not exist");
+                        throw new Exception("Download file " + filePath + " not exist");
                     }
                     params.putString("event", "complete");
                     params.putString("file", filePath);
-                    params.putString("url", cursor.getString(cursor.getColumnIndex(DownloadManager.COLUMN_URI)));
-                    params.putString("mime", cursor.getString(cursor.getColumnIndex(DownloadManager.COLUMN_MEDIA_TYPE)));
-                    params.putDouble("size", cursor.getDouble(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)));
-                    params.putDouble("mtime", cursor.getDouble(cursor.getColumnIndex(DownloadManager.COLUMN_LAST_MODIFIED_TIMESTAMP)));
+                    params.putString("url", cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_URI)));
+                    params.putString("mime", cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_MEDIA_TYPE)));
+                    params.putDouble("size", cursor.getDouble(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)));
+                    params.putDouble("mtime", cursor.getDouble(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LAST_MODIFIED_TIMESTAMP)));
                 } catch (Throwable e) {
                     if (BuildConfig.DEBUG) {
                         e.printStackTrace();
@@ -907,7 +956,7 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
         }
         File file = new File(path);
         if (!file.exists() || !file.isFile()) {
-            promise.reject("E_MISSING", "file not exist: " + path);
+            promise.reject("E_ILLEGAL", "file not exist: " + path);
             return;
         }
         String fileName = file.getName();
@@ -929,60 +978,7 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
             dm.addCompletedDownload(title, des, true, mime, path, file.length(), showNotification);
             promise.resolve(null);
         } catch (Throwable e) {
-            promise.reject(e);
-            if (BuildConfig.DEBUG) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    @ReactMethod
-    public void openFile(ReadableMap options, final Promise promise) {
-        try {
-            String path = options.hasKey("file") ? options.getString("file") : null;
-            if (path == null) {
-                promise.reject("E_MISSING", "missing path argument");
-                return;
-            }
-            Activity activity = getCurrentActivity();
-            if (activity == null) {
-                throw new RuntimeException("get current activity failed");
-            }
-            Uri uri = Uri.parse(path);
-            String scheme = uri.getScheme();
-            boolean isPath = null == scheme;
-            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                if (isPath || "file".equals(scheme)) {
-                    uri = getProviderUri(uri.getPath());
-                }
-            } else if (isPath) {
-                uri = Uri.parse("file://" + path);
-            }
-            int reqId = options.hasKey("reqId") ? options.getInt("reqId") : 0;
-            String mime = options.hasKey("mime") ? options.getString("mime") : null;
-            String title = options.hasKey("title") ? options.getString("title") : null;
-            if (TextUtils.isEmpty(mime)) {
-                mime = getMimeTypeFromStr(new String[]{path}, true)[0];
-            }
-            Intent intent = new Intent();
-            if (!TextUtils.isEmpty(title)) {
-                intent.putExtra(Intent.EXTRA_SUBJECT, title);
-            }
-            intent.setDataAndType(uri, mime);
-            intent.setAction(Intent.ACTION_VIEW);
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            if (reqId > 0) {
-                activity.startActivityForResult(intent, reqId);
-            } else {
-                activity.startActivity(intent);
-            }
-            promise.resolve(null);
-        } catch (Throwable e) {
-            promise.reject(e);
-            if (BuildConfig.DEBUG) {
-                e.printStackTrace();
-            }
+            rejectThrowable(promise, e);
         }
     }
 
@@ -1026,14 +1022,159 @@ public class ArchivesModule extends ReactContextBaseJavaModule {
                     }
                     break;
             }
-            assert typeface != null;
+            if (typeface == null) {
+                throw new IOException("Create font typeface failed");
+            }
             ReactFontManager.getInstance().setTypeface(fontFamilyName, Typeface.NORMAL, typeface);
             promise.resolve(null);
         } catch (Throwable e) {
-            promise.reject(e);
-            if (BuildConfig.DEBUG) {
-                e.printStackTrace();
+            rejectThrowable(promise, e);
+        }
+    }
+
+    @ReactMethod
+    public void sendIntent(ReadableMap options, final Promise promise) {
+        String action = options.hasKey("action") ? options.getString("action") : null;
+        if (action == null || action.isEmpty()) {
+            promise.reject("E_MISSING", "missing action argument");
+            return;
+        }
+        try {
+            Activity activity = getCurrentActivity();
+            if (activity == null) {
+                throw new Exception("get current activity failed");
             }
+            Intent intent = new Intent();
+            intent.setAction(getClassFieldValue(action));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                String identifier = options.hasKey("identifier") ? options.getString("identifier") : null;
+                if (!TextUtils.isEmpty(identifier)) {
+                    intent.setIdentifier(identifier);
+                }
+            }
+            ReadableArray categories = options.hasKey("categories") ? options.getArray("categories") : null;
+            if (categories != null) {
+                for (int i = 0; i < categories.size(); i++) {
+                    intent.addCategory(getClassFieldValue(categories.getString(i)));
+                }
+            }
+            String packageName = options.hasKey("package") ? options.getString("package") : null;
+            if (!TextUtils.isEmpty(packageName)) {
+                intent.setPackage(packageName);
+            }
+            String component = options.hasKey("component") ? options.getString("component") : null;
+            if (component != null && !component.isEmpty()) {
+                int splitIndex = component.indexOf("/");
+                if (splitIndex > 0) {
+                    intent.setComponent(new ComponentName(
+                            component.substring(0, splitIndex), component.substring((splitIndex+1))
+                    ));
+                }
+            }
+            // 除了使用 setData, 还有一个 setClipData 可设置多个 data, 没整明白使用场景, 这里先不做处理了
+            String data = options.hasKey("data") ? options.getString("data") : null;
+            String type = options.hasKey("type") ? options.getString("type") : null;
+            if (!TextUtils.isEmpty(type) && !TextUtils.isEmpty(data)) {
+                intent.setDataAndType(Uri.parse(data), type);
+            } else if (!TextUtils.isEmpty(data)) {
+                intent.setData(Uri.parse(data));
+            } else if (!TextUtils.isEmpty(type)) {
+                intent.setType(type);
+            }
+            // extras:[{key:String, value:String|Number|Bool|Array}, type:"uri|int|string"]
+            ReadableArray extras = options.hasKey("extras") ? options.getArray("extras") : null;
+            if (extras != null) {
+                for(int i = 0; i < extras.size(); ++i) {
+                    ReadableMap map = extras.getMap(i);
+                    String name = map.hasKey("key") ? map.getString("key") : null;
+                    if (TextUtils.isEmpty(name)) {
+                        continue;
+                    }
+                    ReadableType valType = map.getType("value");
+                    String assType = map.hasKey("type") ? map.getString("type") : null;
+                    switch(valType) {
+                        case Boolean:
+                            intent.putExtra(name, map.getBoolean("value"));
+                            break;
+                        case Number:
+                            if ("int".equals(assType)) {
+                                intent.putExtra(name, map.getInt("value"));
+                            } else {
+                                intent.putExtra(name, map.getDouble("value"));
+                            }
+                            break;
+                        case String:
+                            String val = map.getString("value");
+                            if ("uri".equals(assType)) {
+                                intent.putExtra(name, Uri.parse(val));
+                            } else {
+                                intent.putExtra(name,  val);
+                            }
+                            break;
+                        case Array:
+                            ReadableArray lists = map.getArray("value");
+                            if (lists == null || lists.size() < 1) {
+                                break;
+                            }
+                            if ("int".equals(assType)) {
+                                ArrayList<Integer> initData = new ArrayList<>();
+                                for(int j = 0; j < lists.size(); ++j) {
+                                    initData.add(lists.getInt(j));
+                                }
+                                intent.putIntegerArrayListExtra(name, initData);
+                            } else if ("uri".equals(assType)) {
+                                ArrayList<Uri> initData = new ArrayList<>();
+                                for(int j = 0; j < lists.size(); ++j) {
+                                    initData.add(Uri.parse(lists.getString(j)));
+                                }
+                                intent.putParcelableArrayListExtra(name, initData);
+                            } else {
+                                ArrayList<String> initData = new ArrayList<>();
+                                for(int j = 0; j < lists.size(); ++j) {
+                                    initData.add(lists.getString(j));
+                                }
+                                intent.putStringArrayListExtra(name, initData);
+                            }
+                            break;
+                        default:
+                            throw new Exception("Extra type for " + name + " not supported.");
+                    }
+                }
+            }
+            // Flag
+            ReadableArray flags = options.hasKey("flag") ? options.getArray("flag") : null;
+            if (flags != null && flags.size() > 0) {
+                Class<?> mediaStore = intent.getClass();
+                for(int i = 0; i < flags.size(); ++i) {
+                    intent.addFlags(mediaStore.getDeclaredField(flags.getString(i)).getInt(intent));
+                }
+            }
+            int reqId = options.hasKey("reqId") ? options.getInt("reqId") : 0;
+            if (reqId > 0) {
+                activity.startActivityForResult(intent, reqId);
+            } else {
+                activity.startActivity(intent);
+            }
+            promise.resolve(null);
+        } catch (Throwable e) {
+            rejectThrowable(promise, e);
+        }
+    }
+
+    private static String getClassFieldValue(String className) throws Throwable {
+        int splitIndex = className.indexOf("$");
+        if (splitIndex < 1) {
+            return className;
+        }
+        Class<?> mediaStore = Class.forName(className.substring(0, splitIndex));
+        Field field = mediaStore.getDeclaredField(className.substring(splitIndex + 1));
+        return (String) field.get(mediaStore);
+    }
+
+    private static void rejectThrowable(final Promise promise, Throwable e) {
+        promise.reject(e);
+        if (BuildConfig.DEBUG) {
+            e.printStackTrace();
         }
     }
 }

@@ -1,5 +1,5 @@
 
-declare namespace archives {
+declare namespace types {
   interface BlobPlus extends Blob {
     base64(): Promise<string>;
     dataUrl(): Promise<string>;
@@ -27,7 +27,7 @@ declare namespace archives {
   interface ResponsePlus extends Response {
     clone(): ResponsePlus;
   }
-  
+
   interface HttpRequest extends Object {
     init(): object;
     init(key: string): any;
@@ -39,8 +39,8 @@ declare namespace archives {
     method(): string;
     method(method: string): this;
 
-    timeout(): Number;
-    timeout(method: Number): this;
+    timeout(): number;
+    timeout(method: number): this;
 
     credentials(): string;
     credentials(include: boolean): this;
@@ -71,7 +71,7 @@ declare namespace archives {
 
     payload(): string;
     payload(body: null|string|object|URLSearchParams|FormData|Blob|ArrayBuffer|DataView): this;
-    
+
     header(): object;
     header(key: string|Array<string>): string|Array<string>|object;
     header(key:string|Array<string>, value:string|Array<string>|null, append?:boolean): this;
@@ -123,6 +123,17 @@ declare namespace archives {
     onResponse(res:ResponsePlus, req:HttpRequest): Promise<ResponsePlus>;
   }
 
+  interface OpenFileOptions {
+    mime?: string,
+    title?: string,
+    onClose?: (() => any) | null,
+  }
+
+  interface CameraRollOptions {
+    album?: string,
+    type?: 'photo' | 'video' | 'auto',
+  }
+
   interface FileItem extends Object{
     name: string,
     path: string,
@@ -130,13 +141,23 @@ declare namespace archives {
     isDir: boolean,
   }
 
-  interface OpenFileOptions {
-    mime?: string,
-    title?: string,
-    onClose?: (() => any) | null,
+  interface AndroidIntentExtra {
+    key: string,
+    value: string|number|Array<string|number>,
+    type?: 'string' | 'int' | 'uri',
   }
 
-  type networkType_ = 1 | 2 | 3;
+  interface AndroidIntentOptions {
+    action: string,
+    data?: string,
+    type?: string,
+    categories?: Array<string>,
+    package?: string,
+    component?: string,
+    identifier?: string,
+    extras?: Array<AndroidIntentExtra>,
+  }
+
   interface AndroidDownloadOptions {
     url: string,
     mime?: string,
@@ -146,15 +167,14 @@ declare namespace archives {
     scannable?: boolean,
     roaming?: boolean,
     quiet?: boolean,
-    network?: networkType_,
+    network?: 1|2|3,
     headers?: object,
-    onProgress?: ((total:Number, loaded:Number, percent:Number) => any) | null,
-    onComplete?: ((file:string, url:string, mime:string, size:Number, mtime:Number) => any) | null,
-    onAutoOpen?: ((result:null|Error) => any) | null,
     onError?: ((result:Error) => any) | null,
+    onProgress?: ((total:number, loaded:number, percent:number) => any) | null,
+    onComplete?: ((file:string, url:string, mime:string, size:number, mtime:number) => any) | null,
   }
 
-  interface NoticeOptions {
+  interface AndroidDownloadNotice {
     file: string,
     mime?: string,
     title?: string,
@@ -162,46 +182,46 @@ declare namespace archives {
     quiet?: boolean,
   }
 
-  interface CameraRollOptions {
-    album?: string,
-    type?: 'photo' | 'video' | 'auto',
-  }
-
-  type encoding_ = 'text' | 'blob' | 'base64' | 'buffer' | 'uri';
-  type algorithm_ = 'md5' | 'sha1' | 'sha224' | 'sha256' | 'sha384' | 'sha512';
+  type _encoding =  'buffer' | 'text' | 'base64' | 'uri';
+  type _fileEncoding = 'blob' | _encoding;
+  type _algorithm = 'md5' | 'sha1' | 'sha224' | 'sha256' | 'sha384' | 'sha512';
+  type _mediaType = 'images' | 'video' | 'audio' | 'files' | 'downloads' |
+    'audio.artists' | 'audio.artists' | 'audio.albums' | 'audio.genres' | 'audio.playlists';
+  type _mediaVolume = 'external' | 'internal';
 }
 
 declare const archives: {
   BlobPlus: {
-    new (blobParts?: Array<Blob | string>, options?: BlobOptions): archives.BlobPlus;
-    prototype: archives.BlobPlus;
+    new (blobParts?: Array<Blob | string>, options?: BlobOptions): types.BlobPlus;
+    prototype: types.BlobPlus;
   };
 
   RequestPlus: {
     new (
-      input: string | Request | archives.RequestInitPlus | archives.RequestPlus,
-      init?: archives.RequestInitPlus
-    ): archives.RequestPlus;
-    prototype: archives.RequestPlus;
+      input: string | Request | types.RequestInitPlus | types.RequestPlus,
+      init?: types.RequestInitPlus
+    ): types.RequestPlus;
+    prototype: types.RequestPlus;
   };
 
   ResponsePlus: {
-    new (body?: BodyInit_, init?: ResponseInit): archives.ResponsePlus;
-    prototype: archives.ResponsePlus;
+    new (body?: BodyInit_, init?: ResponseInit): types.ResponsePlus;
+    prototype: types.ResponsePlus;
   };
 
   fetchPlus(
-    input: string | Request | archives.RequestInitPlus | archives.RequestPlus,
-    init?: archives.RequestInitPlus
-  ): Promise<archives.ResponsePlus>;
+    input: string | Request | types.RequestInitPlus | types.RequestPlus,
+    init?: types.RequestInitPlus
+  ): Promise<types.ResponsePlus>;
 
   HttpService: {
-    new (baseUrl: string): archives.HttpService;
-    prototype: archives.HttpService;
+    new (baseUrl: string): types.HttpService;
+    prototype: types.HttpService;
   };
 
   dirs: {
     MainBundle: string;
+    Root: string;
     Document: string;
     Library: string;
     Caches: string;
@@ -209,6 +229,7 @@ declare const archives: {
   },
 
   external?: {
+    AppRoot: string;
     AppCaches: string;
     AppDocument: string;
     Root: string;
@@ -225,10 +246,66 @@ declare const archives: {
 
   status: {
     downloadRootDir: string;
+    packageName: string;
     packageVersion: string;
     currentVersion: string;
-    isFirstTime: string;
-    isRolledBack: string;
+    isFirstTime: boolean;
+    rolledVersion: string;
+  },
+
+  fs:{
+    // Common
+    isDir(path: string): Promise<boolean | null>;
+    mkDir(path: string, recursive?: boolean): Promise<null>;
+    rmDir(path: string, recursive?: boolean): Promise<null>;
+    readDir(path: string): Promise<Array<types.FileItem | object>>;
+
+    writeFile(
+      file: string,
+      content: string|Blob|ArrayBuffer|Array<string>,
+      flag?: true|number|null
+    ): Promise<null>;
+
+    readFile(
+      path: string,
+      encoding?: types._fileEncoding,
+      offset?: number,
+      length?: number
+    ): Promise<string | types.BlobPlus | ArrayBuffer>;
+
+    copyFile(source: string, dest: string, overwrite?: boolean): Promise<null>;
+    moveFile(source: string, dest: string, overwrite?: boolean): Promise<null>;
+    unlink(file: string): Promise<null>;
+
+    openFile(file: string, options?: types.OpenFileOptions): Promise<null>;
+    getMime(file: string | Array<string>): Promise<string | Array<string>>;
+    getExt(mime: string | Array<string>): Promise<string | Array<string>>;
+    getHash(file: string, algorithm?: types._algorithm): Promise<string>;
+    loadFont(fontName: string, file: string): Promise<null>;
+    reload(): Promise<null>;
+    unzip(file: string, dir: string, md5?: string): Promise<null>;
+
+    mergePatch(source:string, patch:string, dest:string): Promise<null>;
+    unzipBundle(bundle:string, md5:string): Promise<null>;
+    unzipPatch(patch:string, md5Version:string, patchMd5?:string): Promise<null>;
+    unzipDiff(patch:string, md5Version:string, patchMd5?:string): Promise<null>;
+    switchVersion(md5Version:string, reload?:boolean): Promise<null>;
+    markSuccess(): Promise<null>;
+    reinitialize(reload?:boolean): Promise<null>;
+
+    // iOS
+    saveToCameraRoll(file: string, options:types.CameraRollOptions): Promise<string>;
+
+    // Android
+    scanFile(file: string): Promise<string>;
+    isExternalManager(): Promise<boolean>;
+    requestExternalManager(): Promise<null>;
+    getShareUri(file: string): Promise<string>;
+    getContentUri(mediaType?: types._mediaType, type?: types._mediaVolume): Promise<string>;
+    sendIntent(options: types.AndroidIntentOptions): Promise<null>;
+    download(options: types.AndroidDownloadOptions): Promise<null>;
+    addDownload(options: types.AndroidDownloadNotice): Promise<string>;
+    restartAndroid(): Promise<null>;
   },
 
   utils:{
@@ -246,55 +323,8 @@ declare const archives: {
     makeCookie(obj: object): string;
     makeQuery(obj: object): string;
     makeParam(obj: object, strify?:boolean): string;
-    makeUrl(baseUrl: string, path?:string, queries?:string): string;
-    readBlob(blob: Blob, encoding?: archives.encoding_): Promise<string|ArrayBuffer>;
-  },
-  
-  fs:{
-    isDir(path: string): Promise<boolean | null>;
-    mkDir(path: string, recursive?: boolean): Promise<null>;
-    rmDir(path: string, recursive?: boolean): Promise<null>;
-    readDir(path: string): Promise<archives.FileItem | object>;
-
-    writeFile(
-      file: string,
-      content: string|Blob|ArrayBuffer|Array<string>,
-      flag?:null|true|number
-    ): Promise<null>;
-
-    readFile(
-      path: string,
-      encoding?: archives.encoding_,
-      offset?: number,
-      length?: number
-    ): Promise<archives.BlobPlus | ArrayBuffer | string>;
-
-    copyFile(source: string, dest: string, overwrite?: boolean): Promise<null>;
-    moveFile(source: string, dest: string, overwrite?: boolean): Promise<null>;
-    unlink(file: string): Promise<null>;
-
-    openFile(file: string, options?: archives.OpenFileOptions): Promise<null>;
-    getMime(file: string | Array<string>): Promise<string | Array<string>>;
-    getExt(mime: string | Array<string>): Promise<string | Array<string>>;
-    getHash(file: string, algorithm?: archives.algorithm_): Promise<string>;
-    loadFont(fontName: string, file: string): Promise<null>;
-
-    mergePatch(source:string, patch:string, dest:string): Promise<null>;
-    unzip(file: string, dir: string, md5?: string): Promise<null>;
-    unzipBundle(file:string, md5:string): Promise<null>;
-    unzipPatch(file:string, md5Version:string, patchMd5?:string): Promise<null>;
-    unzipDiff(file:string, md5Version:string, originVersion:string, patchMd5?:string): Promise<null>;
-    switchVersion(md5Version:string, reload?:boolean): Promise<null>;
-    markSuccess(): Promise<null>;
-    reload(): Promise<null>;
-
-    saveToCameraRoll(file: string, options:archives.CameraRollOptions): Promise<string>;
-    scanFile(file: string): Promise<string>;
-    getShareUri(file: string): Promise<string>;
-    getContentUri(mediaType?: string, type?: string): Promise<string>;
-    download(options: archives.AndroidDownloadOptions): Promise<null>;
-    addDownload(options: archives.NoticeOptions): Promise<string>;
-    restartAndroid(): Promise<null>;
+    makeUrl(baseUrl: string, path?:string, queries?:object): string;
+    readBlob(blob: Blob, encoding?: types._encoding): Promise<string|ArrayBuffer>;
   },
 };
 

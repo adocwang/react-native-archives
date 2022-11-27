@@ -1,27 +1,32 @@
 {
   "name": "react-native-archives",
-  "version": "0.2.7",
+  "version": "0.3.0",
   "description": "react native pack manager",
-  "main": "./index.js",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/malacca/react-native-archives"
+  "main": "index.js",
+  "author": "malacca",
+  "license": "MIT",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "submodule": "git submodule update --init --recursive",
+    "buildso": "$ANDROID_HOME/ndk/20.1.5948944/ndk-build NDK_PROJECT_PATH=android APP_BUILD_SCRIPT=android/jni/Android.mk NDK_APPLICATION_MK=android/jni/Application.mk NDK_LIBS_OUT=android/src/main/jniLibs"
   },
   "keywords": [
     "react-native",
     "archives"
   ],
   "dependencies": {
-    "minimist": "^1.2.0",
-    "fs-extra": "^8.1.0",
-    "request": "^2.87.0",
-    "tough-cookie-filestore": "^0.0.1",
-    "gradle-to-js": "^2.0.0",
-    "yauzl": "^2.10.0",
+    "ora": "^5.4.1",
     "yazl": "^2.5.1",
-    "ora": "^3.4.0",
-    "wcwidth": "^1.0.1"
+    "yauzl": "^2.10.0",
+    "wcwidth": "^1.0.1",
+    "minimist": "^1.2.7",
+    "fs-extra": "^8.1.0",
+    "node-fetch": "^2.6.7",
+    "tough-cookie": "^4.0.0"
   },
-  "author": "malacca",
-  "license": "MIT"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/malacca/react-native-archives"
+  },
+  "homepage": "https://github.com/malacca/react-native-archives"
 }

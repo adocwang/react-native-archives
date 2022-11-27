@@ -1,0 +1,6 @@
+[submodule "easypush/lzma"]
+	path = easypush/lzma
+	url = https://github.com/sisong/lzma.git
+[submodule "easypush/HDiffPatch"]
+	path = easypush/HDiffPatch
+	url = https://github.com/sisong/HDiffPatch.git

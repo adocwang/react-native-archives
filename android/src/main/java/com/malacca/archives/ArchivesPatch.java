@@ -2,7 +2,7 @@ package com.malacca.archives;
 
 class ArchivesPatch {
     static {
-        System.loadLibrary("bsdiff");
+        System.loadLibrary("hdiff");
     }
     public static native byte[] patchByte(byte[] origin, byte[] patch);
 

@@ -14,7 +14,7 @@ function parseRawStr(raw, cookie) {
     }
     val = decodeURIComponent(val);
     if (key.endsWith('[]')) {
-      key = key.substr(0, key.length - 2);
+      key = key.substring(0, key.length - 2);
       if (Array.isArray(acc[key])) {
         acc[key].push(val);
       } else {
@@ -136,7 +136,7 @@ const utils = {
     return url;
   },
   async readBlob(blob, encoding) {
-    // 读取 blob 为 text/base64/dataUrl/arrayBuffer(默认)
+    // 读取 blob 为 buffer(默认)/text/base64/uri
     encoding = String(encoding||"").toLowerCase();
     const isText = encoding === 'text';
     let bin = await new Promise(function (resolve, reject) {
