@@ -8,7 +8,7 @@
 `yarn add react-native-archives`
 
 
-## ✤ Android
+### ✤ Android
 
 在 `android/app/src/main/AndroidManifest.xml` 根据需要添加声明
 
@@ -87,7 +87,7 @@ public class MainApplication extends Application implements ReactApplication {
 ...
 ```
 
-##  iOS
+###  iOS
 
 ```
 <key>NSPhotoLibraryUsageDescription</key>
@@ -111,7 +111,7 @@ import {
 ```
 
 
-## ♣︎ dirs
+### ♣︎ dirs
 
 应用内部存储空间，有以下特点
 - 专属于 app 的私有目录，无需权限，可直接读写，会随着  app 的卸载而删除
@@ -163,7 +163,7 @@ dirs:{
 ```
 
 
-## ♣︎ external
+### ♣︎ external
 
 外部存储目: Android only (iOS 仅能访问 app 所属沙盒目录)，若需要保存较大文件，建议存在这个系列的目录下，而不是 dirs 目录下
 
@@ -205,7 +205,7 @@ external:{
 }
 ```
 
-### Android 读写共享空间的权限申请
+**Android 读写共享空间的权限申请**
 
 1. Android 6.0 之前：仅需在配置文件 `AndroidManifest.xml` 中声明 `uses-permission`， 即可对整个 `external.Root` 目录进行读写，包括其他 app 的外部存储目录。
 2. Andorid 6.0 ~ 9.0：除了声明之外，还需在使用时动态申请 `WRITE_EXTERNAL_STORAGE` 权限，用户授权后可对整个 `external.Root` 目录进行读写，包括其他 app 的外部存储目录。
@@ -226,14 +226,14 @@ external:{
     ```
     **注意:** 即使获取了权限，仍有部分文件夹不可读写，如 `external.Root/Android/data`，并且声明该权限后，[上架应用市场](https://support.google.com/googleplay/android-developer/answer/10467955) 需要说明原因，否则会被拒
 
-### iOS 
+**iOS 目录**
 
 [iOS 目录](
 https://developer.apple.com/documentation/foundation/nssearchpathdirectory/nsapplicationsupportdirectory)
 
 
 
-## ♣︎ status
+### ♣︎ status
 
 为热更提供的相关变量
 
@@ -251,7 +251,7 @@ status: {
 ```
 
 
-## ♣︎ fs
+### ♣︎ fs
 
 基础 API，可在 Android, iOS 系统使用
 
@@ -345,7 +345,7 @@ fs.mergePatch(source:string, patch:string, dest:string): Promise<null>
 ```
 
 
-## ♣︎ fs
+### ♣︎ fs
 
 热更 API，可在 Android, iOS 系统使用
 
@@ -408,7 +408,7 @@ fs.reinitialize(reload?:boolean): Promise<null>;
 ```
 
 
-## ♣︎ fs
+### ♣︎ fs
 
 仅可在 Android 系统使用的 API；`sendIntent` [FLAG 参考](https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/content/Intent.java#6601)
 
@@ -506,7 +506,7 @@ fs.restartAndroid(): Promise<null>;
 ```
 
 
-## ♣︎ fs
+### ♣︎ fs
 
 仅可在 iOS 系统使用的 API
 
@@ -522,7 +522,7 @@ fs.saveToCameraRoll(file: string, options?:Object): Promise<string>;
 
 
     
-## ♣︎ fetchPlus
+### ♣︎ fetchPlus
 
 使用方法与 `fetch` 基本一致，但增加了一些参数
 
@@ -567,7 +567,7 @@ RN 请求默认会将请求结果缓存在原生中，JS 层得到一个 Blob，
  
 
 
-## ♣︎ HttpService
+### ♣︎ HttpService
 
 在 fetchPlus 基础上拓展的一个 JS 类，用于集中管理应用的远程请求，不多做说明，具体建议看源码。
 
@@ -692,7 +692,7 @@ export default new Service('https://host.com', MockData);
 
 
 
-## ♣︎ 其他
+### ♣︎ 其他
 
 内部使用的一个方法集合，一般用不到，不过也导出了。
 
@@ -742,7 +742,7 @@ import {
 
 # 🛠 开发
 
-## 克隆项目
+### 克隆项目
 
 `git clone https://github.com/malacca/react-native-archives.git  --recurse-submodules`
 
@@ -762,7 +762,7 @@ import {
 
 子项目同步到最新版后，需测试依赖子项目的 [easypush](./easypush/)、[android](./android/)、[ios](./ios/) 是否可正常运行，并更新提交到 npm
 
-## 编译
+### 编译
 
 生成 easypush .node 文件
 
@@ -772,7 +772,7 @@ import {
 
 `yarn buildso`
 
-## 发布
+### 发布
 
 在发布前，先进行 [测试](./examples/ArchivesDemo/README.md)，测试通过后发布到 NPM
 
