@@ -205,7 +205,7 @@ external:{
 }
 ```
 
-**Android 读写共享空间的权限申请**
+Android 读写共享空间的权限申请
 
 1. Android 6.0 之前：仅需在配置文件 `AndroidManifest.xml` 中声明 `uses-permission`， 即可对整个 `external.Root` 目录进行读写，包括其他 app 的外部存储目录。
 2. Andorid 6.0 ~ 9.0：除了声明之外，还需在使用时动态申请 `WRITE_EXTERNAL_STORAGE` 权限，用户授权后可对整个 `external.Root` 目录进行读写，包括其他 app 的外部存储目录。
@@ -226,9 +226,9 @@ external:{
     ```
     **注意:** 即使获取了权限，仍有部分文件夹不可读写，如 `external.Root/Android/data`，并且声明该权限后，[上架应用市场](https://support.google.com/googleplay/android-developer/answer/10467955) 需要说明原因，否则会被拒
 
-**iOS 目录**
+iOS 目录
 
-[iOS 目录](
+1. 一些资料: [iOS 目录](
 https://developer.apple.com/documentation/foundation/nssearchpathdirectory/nsapplicationsupportdirectory)
 
 
@@ -555,7 +555,7 @@ options:{
 }
 ```
 
-**关于 `resText` 和 `keepBlob`**
+关于 **`resText`** 和 **`keepBlob`**
 
 RN 请求默认会将请求结果缓存在原生中，JS 层得到一个 Blob，利用 Blob 读取原生缓存，可读取为 stirng / base64 / buffer 等，即实现 JS 中 Response 对象的 `text()` / `json()` / `blob()` 等方法。
 
@@ -774,7 +774,7 @@ import {
 
 ### 发布
 
-在发布前，先进行 [测试](./examples/ArchivesDemo/README.md)，测试通过后发布到 NPM
+在发布前，先进行 [测试](./examples/ArchivesDev/)，测试通过后发布到 NPM
 
 `npm publish`
 
